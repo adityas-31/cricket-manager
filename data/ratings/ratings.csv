@@ -1,0 +1,129 @@
+﻿id,name,team,role,style,bats,bowls,age,technique,timing,power,vs_spin,running,accuracy,movement,speed,variation,catching,fielding,keeping,composure,concentration,aggression,stamina
+2879,Suryakumar Yadav,India,batter,pace,right,right,35,12,14,16,18,12,8,7,13,8,11,12,1,16,11,14,13
+3362,Shubman Gill,India,batter,off_spin,right,right,26,13,13,13,13,8,7,8,6,5,12,11,3,15,12,12,11
+278,Rohit Sharma,India,batter,off_spin,right,right,38,12,13,17,12,7,8,7,4,6,12,11,3,17,10,11,13
+46,Virat Kohli,India,batter,pace,right,right,37,13,11,9,12,9,6,5,14,6,12,11,1,14,12,12,8
+3122,Ishan Kishan,India,keeper,medium,left,right,27,12,13,15,14,10,2,3,7,2,10,12,13,11,11,12,13
+815,Axar Patel,India,all_rounder,left_arm_spin,left,left,32,10,11,13,12,9,16,11,5,13,11,12,1,9,9,11,12
+281,Hardik Pandya,India,all_rounder,pace,right,right,32,12,12,15,16,12,13,13,14,14,11,11,2,12,11,12,12
+56,Kuldeep Yadav,India,bowler,leg_spin,left,left,31,7,2,5,2,3,15,16,5,16,9,11,1,4,9,3,11
+9459,Ravi Bishnoi,India,bowler,leg_spin,right,right,25,6,4,2,3,3,15,14,4,15,10,12,1,8,9,12,16
+4880,Arshdeep Singh,India,bowler,pace,left,left,27,5,6,6,6,8,12,16,13,14,9,11,3,8,11,9,13
+59,Mohammed Siraj,India,bowler,pace,right,right,32,5,3,3,2,4,14,15,13,14,10,12,3,4,7,3,16
+2900,Sanju Samson,India,keeper,medium,right,right,31,12,14,16,19,10,2,4,7,3,12,12,13,10,11,13,15
+2813,Shreyas Iyer,India,batter,leg_spin,right,right,31,12,12,12,14,10,7,6,5,4,11,13,3,13,11,13,14
+22137,KP Sai Rahul,India,all_rounder,medium,right,right,26,12,10,10,13,7,7,7,6,8,16,12,1,13,12,10,15
+55,Ravindra Jadeja,India,all_rounder,left_arm_spin,left,left,37,12,10,10,11,6,16,12,7,14,10,11,2,9,11,11,12
+284,Jasprit Bumrah,India,bowler,pace,right,right,32,6,7,10,2,3,19,18,17,18,9,10,2,6,8,7,16
+3734,Harry Brook,England,batter,pace,right,right,27,13,17,16,16,10,7,5,12,4,15,11,1,17,10,18,12
+138,Joe Root,England,batter,off_spin,right,right,35,13,12,6,15,8,9,5,5,4,15,11,1,12,12,14,12
+3806,Will Jacks,England,batter,off_spin,right,right,27,10,12,14,12,10,8,11,6,11,11,11,1,13,10,12,11
+3890,Zak Crawley,England,batter,off_spin,right,right,28,10,15,9,16,6,6,5,5,5,15,10,3,12,9,14,12
+143,Jos Buttler,England,keeper,medium,right,right,35,12,14,15,15,12,5,5,10,4,11,15,15,15,11,14,9
+134,Sam Curran,England,all_rounder,pace,left,left,27,9,10,11,10,12,9,10,12,11,11,11,1,10,9,11,10
+780,Liam Livingstone,England,all_rounder,leg_spin,right,right,32,10,13,14,11,11,9,11,4,10,11,11,3,14,9,13,16
+157,Adil Rashid,England,bowler,leg_spin,right,right,38,7,7,7,5,9,13,13,5,14,10,11,2,7,8,7,13
+144,Liam Dawson,England,bowler,left_arm_spin,right,left,36,7,7,4,7,8,16,2,7,9,10,10,1,9,9,10,8
+424,Jofra Archer,England,bowler,pace,right,right,31,8,11,12,6,7,14,15,16,14,9,12,3,11,8,12,12
+4061,Brydon Carse,England,bowler,pace,right,right,30,7,11,11,9,6,9,14,18,12,12,10,2,8,8,12,15
+670,Ben Duckett,England,keeper,off_spin,left,right,31,12,17,10,16,9,5,4,4,4,9,11,13,10,10,17,15
+136,Dawid Malan,England,batter,leg_spin,left,right,38,13,11,12,14,9,6,5,4,4,10,11,1,11,12,10,8
+131,Moeen Ali,England,all_rounder,off_spin,left,right,38,9,12,14,9,10,11,10,5,9,10,11,2,12,9,11,7
+158,Ben Stokes,England,all_rounder,pace,left,right,34,10,12,15,11,6,14,15,12,13,13,13,3,17,10,12,9
+156,Craig Overton,England,bowler,pace,right,right,31,7,11,10,5,8,13,12,14,11,13,12,2,10,9,12,12
+8,Babar Azam,Pakistan,batter,off_spin,right,right,31,12,10,8,12,8,7,9,6,8,12,11,2,13,12,10,12
+752,Agha Salman,Pakistan,batter,off_spin,right,right,32,11,12,10,13,9,10,3,4,4,13,11,3,10,10,12,10
+6,Fakhar Zaman,Pakistan,batter,left_arm_spin,left,left,35,11,11,13,15,10,7,7,5,5,11,10,3,13,11,10,10
+24756,Saim Ayub,Pakistan,batter,pace,left,right,23,10,12,14,13,8,12,8,12,11,12,11,1,13,9,9,12
+20,Mohammad Rizwan,Pakistan,keeper,medium,right,right,34,13,10,7,13,10,4,6,7,3,11,13,16,10,13,11,9
+269,Mohammad Nawaz,Pakistan,all_rounder,left_arm_spin,left,left,32,9,11,12,8,10,15,11,6,14,12,11,2,9,9,10,13
+13,Shadab Khan,Pakistan,all_rounder,leg_spin,right,right,27,10,13,13,15,12,13,8,7,12,11,12,3,12,10,13,16
+44447,Sufiyan Muqeem,Pakistan,bowler,left_arm_spin,left,left,26,5,4,5,3,3,17,15,7,16,10,12,1,13,9,11,11
+773,Usama Mir,Pakistan,bowler,leg_spin,right,right,30,3,4,3,6,6,11,11,5,12,11,12,2,10,11,15,12
+271,Shaheen Afridi,Pakistan,bowler,pace,left,left,25,7,11,14,5,7,14,15,15,14,11,11,1,9,8,9,11
+4328,Haris Rauf,Pakistan,bowler,pace,right,right,32,6,7,9,4,6,13,16,17,15,10,11,2,8,8,8,13
+24759,Usman Khan,Pakistan,keeper,off_spin,right,right,30,10,10,8,8,13,1,3,5,3,9,15,12,7,9,12,10
+1460,Abdullah Shafique,Pakistan,batter,off_spin,right,right,26,11,8,9,13,5,5,7,6,5,11,12,2,9,11,8,14
+1253,Iftikhar Ahmed,Pakistan,all_rounder,off_spin,right,right,35,11,12,12,19,12,12,5,5,8,11,11,1,12,10,14,13
+18,Faheem Ashraf,Pakistan,all_rounder,pace,left,right,32,9,11,12,9,10,11,7,13,8,10,11,3,11,9,10,10
+4301,Naseem Shah,Pakistan,bowler,pace,right,right,23,7,7,12,6,5,13,14,17,13,8,11,1,7,9,6,15
+290,Asghar Afghan,Afghanistan,batter,pace,right,right,38,13,14,15,15,15,7,9,13,9,12,12,3,13,13,12,10
+292,Ihsanullah Janat,Afghanistan,batter,medium,right,right,28,14,12,14,13,13,4,6,8,7,15,14,3,13,10,17,14
+295,Nasir Jamal,Afghanistan,batter,leg_spin,right,right,32,13,10,14,16,16,8,6,6,8,12,12,3,13,11,15,10
+298,Usman Ghani,Afghanistan,batter,medium,right,right,29,13,13,11,13,14,3,5,8,3,13,13,1,11,8,17,15
+289,Afsar Zazai,Afghanistan,keeper,medium,right,right,32,11,11,9,13,14,5,6,9,5,10,10,16,13,9,13,14
+291,Gulbadin Naib,Afghanistan,all_rounder,pace,right,right,35,10,13,10,12,14,11,12,14,13,12,16,2,14,9,7,11
+296,Rahmat Shah,Afghanistan,all_rounder,leg_spin,right,right,32,10,9,7,10,12,12,12,7,10,12,13,2,11,11,10,14
+294,Mujeeb Ur Rahman,Afghanistan,bowler,off_spin,right,right,25,5,5,4,8,9,16,16,6,17,12,13,1,14,11,6,14
+306,Rashid Khan,Afghanistan,bowler,leg_spin,right,right,27,3,3,4,4,4,12,11,4,14,9,10,3,7,8,11,12
+299,Aftab Alam,Afghanistan,bowler,pace,right,right,33,3,4,5,7,5,13,16,14,14,12,11,3,10,12,9,11
+300,Dawlat Zadran,Afghanistan,bowler,pace,right,right,38,2,6,4,5,6,12,17,13,14,13,13,3,11,9,8,14
+297,Shafiqullah Shafiq,Afghanistan,keeper,medium,right,right,36,8,10,9,11,9,5,5,8,5,10,13,14,8,13,17,13
+301,Hashmatullah Shahidi,Afghanistan,batter,off_spin,left,right,31,11,12,9,11,11,6,5,6,5,13,11,3,9,10,12,15
+309,Amir Hamza,Afghanistan,all_rounder,left_arm_spin,right,left,34,8,9,6,9,11,13,13,7,10,12,9,2,8,9,7,12
+312,Karim Janat,Afghanistan,all_rounder,pace,right,right,27,10,6,9,12,8,10,9,14,13,11,12,2,7,7,9,16
+307,Shapoor Zardan,Afghanistan,bowler,pace,left,left,38,3,5,1,5,4,13,15,15,15,8,13,3,10,10,13,14
+1127,Towhid Hridoy,Bangladesh,batter,off_spin,right,right,25,12,9,8,13,12,5,8,6,5,11,12,2,11,12,10,14
+33086,Mehedi Hasan,Bangladesh,batter,medium,left,right,27,9,9,10,8,7,16,10,6,12,12,13,1,7,9,9,11
+8427,Tanzid Hasan,Bangladesh,batter,medium,left,right,26,10,11,14,11,9,2,4,9,4,11,11,3,8,10,9,10
+249,Soumya Sarkar,Bangladesh,batter,pace,left,right,33,10,10,12,9,9,8,8,13,8,12,10,3,18,9,9,12
+253,Liton Das,Bangladesh,keeper,medium,right,right,31,10,11,10,10,8,4,5,7,5,13,14,15,11,10,11,12
+9384,Rishad Hossain,Bangladesh,all_rounder,leg_spin,right,right,23,9,12,14,14,9,13,14,4,14,11,12,1,10,8,9,15
+9372,Hasan Mahmud,Bangladesh,all_rounder,pace,right,right,26,7,6,11,8,4,12,14,14,13,10,11,2,5,8,5,14
+9363,Nasum Ahmed,Bangladesh,bowler,left_arm_spin,left,left,31,7,7,7,6,7,16,6,5,11,10,10,3,9,10,10,11
+259,Taijul Islam,Bangladesh,bowler,left_arm_spin,left,left,34,7,6,4,3,4,16,14,5,14,9,11,2,3,7,7,12
+2246,Nazmul Hossain,Bangladesh,bowler,pace,right,right,38,10,9,8,11,7,10,9,14,10,12,12,1,8,10,9,13
+237,Mustafizur Rahman,Bangladesh,bowler,pace,left,left,30,6,4,7,3,6,17,10,13,14,9,12,1,5,9,7,13
+256,Mushfiqur Rahim,Bangladesh,keeper,medium,right,right,38,12,9,6,11,7,3,1,9,3,12,12,13,11,12,10,13
+9330,Saif Hassan,Bangladesh,batter,off_spin,right,right,27,10,9,12,9,9,12,7,5,9,11,11,3,7,10,6,14
+234,Mahedi Hasan,Bangladesh,all_rounder,pace,right,right,31,9,9,9,8,9,17,12,16,14,11,11,2,9,10,8,16
+232,Afif Hossain,Bangladesh,all_rounder,off_spin,left,right,26,10,10,9,8,11,13,9,6,10,10,12,3,10,10,10,10
+250,Taskin Ahmed,Bangladesh,bowler,pace,left,right,31,6,9,11,8,7,15,14,15,14,9,11,1,6,8,8,11
+26,Travis Head,Australia,batter,off_spin,left,right,32,12,17,15,16,8,9,14,4,12,10,12,1,14,10,16,15
+29,Marnus Labuschagne,Australia,batter,leg_spin,right,right,31,11,9,6,11,6,8,2,6,2,13,14,3,10,11,9,13
+768,Steven Smith,Australia,batter,leg_spin,right,right,36,12,10,8,16,6,8,10,5,10,17,12,2,11,12,10,11
+617,Tim David,Australia,batter,off_spin,right,right,30,13,16,18,13,11,6,5,6,4,11,12,3,14,11,15,14
+37,Alex Carey,Australia,keeper,medium,left,right,34,10,12,8,13,8,5,5,9,4,13,13,19,10,10,13,10
+31,Mitchell Marsh,Australia,all_rounder,pace,right,right,34,12,13,18,14,7,10,11,13,9,11,11,3,13,11,11,12
+630,Cameron Green,Australia,all_rounder,pace,right,right,26,11,10,10,10,7,10,11,14,10,14,11,3,11,11,10,11
+44,Adam Zampa,Australia,bowler,leg_spin,right,right,34,7,7,6,4,8,13,15,5,15,9,10,2,7,9,8,10
+30,Nathan Lyon,Australia,bowler,off_spin,right,right,38,7,9,8,2,4,17,14,5,14,10,11,1,10,7,10,9
+191,Josh Hazlewood,Australia,bowler,pace,left,right,35,6,7,8,2,4,18,14,14,15,10,10,2,7,9,6,15
+36,Mitchell Starc,Australia,bowler,pace,left,left,36,7,7,7,4,4,12,17,16,15,11,10,2,6,8,8,14
+623,Josh Inglis,Australia,keeper,medium,right,right,31,10,13,12,13,11,3,3,9,3,12,13,14,13,9,13,12
+10131,Cooper Connolly,Australia,batter,left_arm_spin,left,left,22,11,11,13,10,10,10,3,4,4,9,11,2,11,10,8,12
+40,Glenn Maxwell,Australia,all_rounder,off_spin,right,right,37,10,14,16,13,11,13,9,5,12,12,12,1,15,9,12,10
+199,Marcus Stoinis,Australia,all_rounder,pace,right,right,36,11,13,13,13,12,11,13,12,12,9,11,2,11,10,14,10
+190,Pat Cummins,Australia,bowler,pace,right,right,32,8,11,13,11,6,15,16,18,15,10,12,2,8,8,12,13
+66,Aiden Markram,South Africa,batter,off_spin,right,right,31,11,12,11,12,8,11,2,6,5,14,10,1,14,10,12,14
+79,David Miller,South Africa,batter,off_spin,left,right,36,14,14,16,19,12,6,6,7,6,11,11,1,14,12,13,11
+651,Temba Bavuma,South Africa,batter,pace,right,right,35,12,10,8,12,7,5,7,15,6,12,11,3,9,12,9,13
+82,Rassie van der Dussen,South Africa,batter,leg_spin,right,right,37,11,9,9,12,9,5,4,4,8,12,11,2,13,11,9,8
+77,Quinton de Kock,South Africa,keeper,medium,left,right,33,12,13,15,14,9,4,4,9,3,11,13,15,20,11,11,15
+6478,Marco Jansen,South Africa,all_rounder,pace,right,left,25,9,13,17,12,7,13,16,16,14,13,11,3,14,9,12,16
+6107,Wiaan Mulder,South Africa,all_rounder,pace,right,right,28,11,11,11,14,6,14,15,12,12,12,12,1,12,10,12,12
+646,Keshav Maharaj,South Africa,bowler,left_arm_spin,right,left,36,7,10,12,12,6,16,14,5,14,10,11,3,6,7,10,11
+71,Tabraiz Shamsi,South Africa,bowler,left_arm_spin,right,left,36,6,4,7,7,3,11,13,5,13,9,11,2,14,9,6,10
+68,Lungi Ngidi,South Africa,bowler,pace,right,right,30,7,5,8,4,5,13,14,17,13,9,11,1,6,9,6,16
+70,Kagiso Rabada,South Africa,bowler,pace,left,right,30,7,11,10,5,6,14,16,18,15,11,11,3,6,7,11,16
+25797,Tristan Stubbs,South Africa,keeper,leg_spin,right,right,25,11,9,9,12,9,2,2,6,2,10,11,13,12,11,10,13
+62,Reeza Hendricks,South Africa,batter,off_spin,right,right,36,12,11,11,16,11,5,6,5,6,11,11,2,12,11,10,10
+4337,Corbin Bosch,South Africa,all_rounder,pace,right,right,31,12,13,9,12,9,11,14,12,13,10,11,1,10,11,15,11
+639,George Linde,South Africa,all_rounder,left_arm_spin,left,left,34,10,12,13,16,13,12,10,4,11,10,11,3,12,10,15,14
+636,Anrich Nortje,South Africa,bowler,pace,right,right,32,5,9,7,4,5,12,16,16,15,9,12,1,12,7,8,16
+6403,Pathum Nissanka,Sri Lanka,batter,medium,right,right,27,12,11,10,13,9,4,4,7,4,10,11,2,11,11,10,14
+167,Kusal Perera,Sri Lanka,batter,medium,left,right,35,11,12,10,14,12,3,3,9,3,10,11,3,10,10,12,10
+164,Dimuth Karunaratne,Sri Lanka,batter,pace,left,right,37,11,11,5,10,6,6,6,14,6,9,11,1,9,11,12,10
+6002,Avishka Fernando,Sri Lanka,batter,pace,right,right,27,9,9,11,8,8,6,5,13,6,10,11,3,9,8,8,13
+166,Kusal Mendis,Sri Lanka,keeper,medium,right,right,31,12,11,13,16,8,5,7,7,5,13,11,13,12,11,11,16
+21945,Charith Asalanka,Sri Lanka,all_rounder,off_spin,left,right,28,10,10,11,10,10,16,9,5,15,10,11,3,11,10,10,16
+178,Dasun Shanaka,Sri Lanka,all_rounder,pace,right,right,34,10,12,14,8,11,11,10,12,10,11,12,3,12,9,11,13
+21942,Maheesh Theekshana,Sri Lanka,bowler,off_spin,right,right,25,7,4,6,5,7,18,11,5,15,9,11,3,4,9,3,11
+34703,Dunith Wellalage,Sri Lanka,bowler,left_arm_spin,left,left,23,8,9,8,9,9,15,11,5,14,12,10,1,9,8,9,15
+170,Dushmantha Chameera,Sri Lanka,bowler,pace,right,right,34,6,4,4,2,8,13,13,15,13,10,11,2,6,8,3,12
+6161,Asitha Fernando,Sri Lanka,bowler,pace,right,right,28,5,3,7,3,3,11,16,15,13,10,11,2,14,7,7,13
+323,Sadeera Samarawickrama,Sri Lanka,keeper,medium,right,right,30,10,11,7,12,10,5,3,8,5,14,11,12,12,10,11,11
+6391,Bhanuka Rajapaksa,Sri Lanka,batter,pace,left,right,34,9,10,11,11,12,6,4,15,6,9,10,1,10,9,11,15
+4916,Wanindu Hasaranga,Sri Lanka,all_rounder,leg_spin,right,right,28,9,12,12,11,12,15,17,6,16,10,11,3,11,8,12,11
+171,Dhananjaya de Silva,Sri Lanka,all_rounder,off_spin,right,right,34,10,11,10,10,6,14,6,5,8,14,12,2,9,10,11,10
+34550,Janith Liyanage,Sri Lanka,bowler,pace,right,right,30,11,9,8,9,9,13,4,14,5,10,11,1,11,12,10,16

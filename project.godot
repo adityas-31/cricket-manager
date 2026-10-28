@@ -1,0 +1,19 @@
+; Engine configuration file.
+
+config_version=5
+
+[application]
+
+config/name="Cricket Manager"
+run/main_scene="res://scenes/app.tscn"
+config/features=PackedStringArray("4.6")
+
+[display]
+
+window/size/viewport_width=1440
+window/size/viewport_height=900
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

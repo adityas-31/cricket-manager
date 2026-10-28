@@ -1,0 +1,20 @@
+# Godot's import cache and editor state (rebuilt on open)
+.godot/
+*.translation
+*.csv.import
+
+# Exported builds
+/build/
+*.exe
+*.pck
+
+# Python
+__pycache__/
+
+# Downloaded Cricsheet data (see data/cricsheet/README.md for how to get it)
+data/cricsheet/*
+!data/cricsheet/README.md
+!data/cricsheet/.gdignore
+
+# Local backups the import tools make before overwriting teams.json
+data/teams.backup*.json

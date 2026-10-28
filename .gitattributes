@@ -1,0 +1,4 @@
+# Normalise line endings in the repo; Godot and Python both read LF fine on Windows.
+* text=auto eol=lf
+*.zip binary
+*.png binary
