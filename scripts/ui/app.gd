@@ -5,10 +5,12 @@ extends Control
 ## Screens are Controls that may implement title(), subtitle(), continue_label(),
 ## on_continue() and on_shown() (called every time the screen is opened).
 ##
-## Continue works like FM's: it takes you to Match Day when the club plays today, otherwise
-## it plays the day's other fixtures and moves the calendar to the next match day.
+## Continue works like FM's: on a day the club plays it goes to Tactics to pick the XI, then
+## (as "Start Match") to Match Day; otherwise it plays the day's other fixtures and moves the
+## calendar to the next match day. After the club's match, "Done" moves the calendar on and
+## goes back to Home.
 ##
-## Command-line extras (after `--`): --squad, --tactics, --fixtures, --competition or --match
+## Command-line extras (after `--`): --squad, --tactics, --training, --fixtures, --competition or --match
 ## opens that screen; --demo opens Match Day and auto-plays quickly; --save=<path> uses
 ## another career file (e.g. user://test.json) instead of user://career.json.
 
@@ -17,6 +19,7 @@ const NAV := [
 	{"id": "inbox", "label": "Inbox", "script": "res://scripts/ui/inbox_screen.gd"},
 	{"id": "squad", "label": "Squad", "script": "res://scripts/ui/squad_screen.gd"},
 	{"id": "tactics", "label": "Tactics", "script": "res://scripts/ui/tactics_screen.gd"},
+	{"id": "training", "label": "Training", "script": "res://scripts/ui/training_screen.gd"},
 	{"id": "match", "label": "Match Day", "script": "res://scripts/ui/match_screen.gd"},
 	{"id": "fixtures", "label": "Fixtures", "script": "res://scripts/ui/fixtures_screen.gd"},
 	{"id": "competition", "label": "Competition", "script": "res://scripts/ui/competition_screen.gd"},
@@ -56,7 +59,7 @@ func _ready() -> void:
 	_build_note_dialog()
 	var start := "home"
 	var args := OS.get_cmdline_user_args()
-	for id in ["squad", "tactics", "fixtures", "competition", "match", "transfers", "finances"]:
+	for id in ["squad", "tactics", "training", "fixtures", "competition", "match", "transfers", "finances"]:
 		if "--" + id in args:
 			start = id
 	if "--demo" in args:
@@ -93,7 +96,7 @@ func refresh_header() -> void:
 
 func default_continue_label() -> String:
 	if season.user_match_pending():
-		return "Match Day"
+		return "Start Match" if _on_tactics() else "Match Day"
 	return "Next Season" if season.is_over() else "Continue"
 
 
@@ -109,7 +112,7 @@ func _on_continue() -> void:
 ## final has been played.
 func advance() -> void:
 	if season.user_match_pending():
-		show_screen("match")
+		show_screen("match" if _on_tactics() else "tactics")
 		return
 	if season.is_over():
 		season.start_next_season()
@@ -119,7 +122,20 @@ func advance() -> void:
 	var from := season.date_text()
 	season.advance()
 	GameLog.event("advance", {"from": from, "to": season.date_text(), "position": season.position(club)})
-	show_screen("match" if season.user_match_pending() else "home")
+	show_screen("tactics" if season.user_match_pending() else "home")
+
+
+## After the club's match has been played and reviewed: on to the next match day, then Home.
+func finish_match_day() -> void:
+	if not season.is_over():
+		var from := season.date_text()
+		season.advance()
+		GameLog.event("advance", {"from": from, "to": season.date_text(), "position": season.position(club)})
+	show_screen("home")
+
+
+func _on_tactics() -> bool:
+	return _current != null and _current == _screens.get("tactics")
 
 
 ## Starts a new career with the given club, replacing the saved one.

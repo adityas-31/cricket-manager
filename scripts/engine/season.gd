@@ -61,6 +61,9 @@ var ledger: Array = []  # the club's money in and out: {day, text, amount}
 var offers: Array = []  # AI bids for the club's players: {player, from, fee, day, status}
 var listed := {}  # the club's transfer-listed players -> true
 var champion: CricketTeam = null
+var training := Training.default_plan()  # the club's team training: {focus, intensity}
+var training_focus := {}  # CricketPlayer -> their own focus (Training.INDIVIDUAL), if not the team's
+var last_training := {}  # the latest Training.run report, for the Training screen
 ## Lines describing selection changes made at the last start_match() for the club.
 var last_selection_changes: Array = []
 var rng := RandomNumberGenerator.new()
@@ -180,7 +183,8 @@ func advance() -> bool:
 		save()
 		return false
 	for p in condition:
-		condition[p] = minf(condition[p] + RECOVERY_PER_DAY * (next - day), 100.0)
+		if not p in club.squad:  # the club's squad recovers through training, below
+			condition[p] = minf(condition[p] + RECOVERY_PER_DAY * (next - day), 100.0)
 	var was := day
 	day = next
 	_pay_wages(day / 7 - was / 7)
@@ -194,6 +198,14 @@ func advance() -> bool:
 			injuries.erase(p)
 			if p in club.squad:
 				add_news("%s is fit again" % p.name, "Back in full training and available for selection.")
+	last_training = Training.run(self, day - was)
+	var report := Training.summary(last_training, self)
+	if report != "":
+		add_news("Training report", report)
+		var gains: Dictionary = last_training.gains
+		GameLog.event("training", {"days": last_training.days, "focus": training.focus, "intensity": training.intensity,
+			"individual": training_focus.size(), "injured": last_training.injured.map(func(x): return x.name),
+			"gain": snappedf(gains.values().reduce(func(a, b): return a + b, 0.0), 0.01)})
 	save()
 	return true
 
@@ -325,12 +337,17 @@ func _roll_injury(p: CricketPlayer) -> void:
 	var chance := INJURY_BASE + MatchDynamics.fatigue(condition[p]) * INJURY_PER_FATIGUE
 	if rng.randf() >= chance:
 		return
+	injure(p)
+
+
+## Puts a player out for a random spell. where: "" for a match, or e.g. "in training".
+func injure(p: CricketPlayer, where := "") -> void:
 	var days: int = INJURY_DAYS[rng.randi_range(0, INJURY_DAYS.size() - 1)]
 	injuries[p] = day + days
 	if p in club.squad:
-		add_news("%s injured" % p.name, "Out for about %d days with a %s." % [
+		add_news("%s injured%s" % [p.name, " " + where if where != "" else ""], "Out for about %d days with a %s." % [
 			days, INJURY_TYPES[rng.randi_range(0, INJURY_TYPES.size() - 1)]])
-		GameLog.event("injury", {"player": p.name, "days": days, "condition": roundi(condition[p])})
+		GameLog.event("injury", {"player": p.name, "days": days, "condition": roundi(condition[p]), "where": where})
 
 
 func _report(f: Dictionary) -> void:
@@ -741,6 +758,7 @@ func _remove_player(p: CricketPlayer) -> void:
 	contracts.erase(p)
 	injuries.erase(p)
 	listed.erase(p)
+	training_focus.erase(p)
 
 
 func _reset_for(new_year: int) -> void:
@@ -820,6 +838,10 @@ func save() -> void:
 	data.offers = offers.map(func(o): return {"player": o.player.id, "from": teams.find(o.from), "fee": o.fee,
 		"day": o.day, "status": o.status})
 	data.listed = listed.keys().map(func(p): return p.id)
+	data.training = training
+	data.training_focus = {}
+	for p: CricketPlayer in training_focus:
+		data.training_focus[str(p.id)] = training_focus[p]
 	for p: CricketPlayer in stats:
 		data.players[str(p.id)] = {"form": form[p], "condition": condition[p], "stats": stats[p]}
 	for f in fixtures:
@@ -884,6 +906,13 @@ static func load_from(path: String) -> Season:
 			"day": int(od.day), "status": od.status})
 	for id in data.listed:
 		s.listed[by_id[int(id)]] = true
+	var plan: Dictionary = data.get("training", {})
+	if Training.FOCUSES.has(plan.get("focus")) and Training.INTENSITIES.has(plan.get("intensity")):
+		s.training = {"focus": plan.focus, "intensity": plan.intensity}
+	var focus: Dictionary = data.get("training_focus", {})
+	for key in focus:
+		if by_id.has(int(key)) and focus[key] in Training.INDIVIDUAL:
+			s.training_focus[by_id[int(key)]] = focus[key]
 	for key in data.players:
 		var p: CricketPlayer = by_id.get(int(key))
 		if p == null:

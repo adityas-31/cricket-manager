@@ -178,6 +178,14 @@ static func _umpire(rng: RandomNumberGenerator, ctx: Dictionary, result: Diction
 		var fielding: CricketTeam = ctx.fielding
 		result.appeal = {"kind": "lbw" if rng.randf() < 0.6 else "caught behind", "given_out": false,
 			"truly_out": rng.randf() < SHOUT_OUT, "keeper": fielding.keeper()}
+		# The ball went where the appeal says: into the pad, or through to the keeper.
+		if result.appeal.kind == "lbw":
+			result.angle = 0.0
+			result.distance = 0.0
+		else:
+			result.angle = 180.0 - absf(rng.randfn(0.0, 15.0))
+			result.distance = 18.0
+		result.region = ""
 
 
 static func _bowler_quality(bowler: CricketPlayer, ctx: Dictionary) -> float:

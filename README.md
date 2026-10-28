@@ -49,12 +49,16 @@ read back when reviewing a play-test. Each line is one JSON event:
 Godot's own console log is kept alongside as `godot.log`. Pass `--no-log` after `--` to run
 without a play log.
 
-**Continue** (top right) drives the game like FM's: on a day your club plays it takes you
-to Match Day, where it plays and pauses the match (Next Ball / Next Over / Sim to End step
-through it). Once the match is over, Continue plays the day's other fixtures and moves to
-the next match day. Start a career with another club from Home.
+**Continue** (top right) drives the game like FM's. On a day your club plays it takes you
+to Tactics first: pick the XI and plan, then **Start Match** opens Match Day, where Continue
+plays and pauses the match (Next Ball / Next Over / Sim to End step through it; the Speed
+slider runs faster to the right). Play stops at the innings break until you press **Start 2nd
+Innings**. When the match ends the Report tab opens (result, key performances, ratings, league
+position, next match, the squad's condition and injuries); **Done** plays the day's other
+fixtures, runs training up to the next match day and goes back to Home. Start a career with
+another club from Home.
 
-Command-line extras go after `--`: `--squad`, `--tactics`, `--fixtures`, `--competition` or
+Command-line extras go after `--`: `--squad`, `--tactics`, `--training`, `--fixtures`, `--competition` or
 `--match` opens that screen, `--demo` auto-plays Match Day fast, and `--save=user://x.json`
 uses another career file.
 
@@ -227,13 +231,22 @@ their academies.
 - **Home pitch**: each team has one in `teams.json`; matches are played on the home side's.
 - **Squads**: 16 players per club; the XI is picked from them (`selection.gd`). AI clubs pick
   their best fit XI before every match, which rotates tired players. Your XI is yours to pick
-  on Tactics > Selection (or tick "Assistant picks the XI"); injured players in it are
+  on Tactics (or tick "Assistant picks the XI"); injured players in it are
   replaced at kick-off by the best reserve of the same kind, and the change goes in the news.
 - **Workload**: every player in an XI loses 12% condition to a match day on top of what the
   match itself costs, and recovers 5% a day. Batters and spinners stay fresh; a fast bowler
   who plays every game drops below 75% (tired) after about five.
 - **Injuries**: about 1.2% per player per match, rising to 6% for a spent player; out for
   3-28 days. Your club's injuries and returns are in the news.
+- **Training** (`training.gd`, Training screen): on the days between matches your squad
+  trains with a team focus (Balanced, Batting, Bowling, Fielding, Fitness, Recovery) at an
+  intensity (Light, Normal, Hard), and any player can have their own focus. It replaces the
+  plain 5%-a-day recovery for your club: Light recovers 40% faster, Hard 40% slower, Recovery
+  focus 30% faster with no development. Focused attributes grow by 0.06 points a day at
+  Normal (x0.5 Light, x1.7 Hard), shared across them, in full up to age 22 and tailing off to
+  a tenth by 31; skills a player doesn't use (below 5) aren't trained. Hard sessions risk
+  injuries (0.5% a player a day, more when tired), Normal 0.15%, Light none. A training report
+  goes to the Inbox after each block. Other clubs just rest.
 - **Between matches**: form (from match ratings) sets a player's starting confidence;
   season stats and ratings accumulate.
 - **Transfers and contracts** (`transfers.gd`, Transfers and Finances screens): every player
@@ -292,6 +305,7 @@ scripts/engine/              Simulation, no UI code
   captain_ai.gd              Batting intent, bowling changes, field approach
   match_dynamics.gd          Condition, confidence and pressure meters
   tactics.gd                 Batting and bowling roles, suggestions
+  training.gd                Training between matches: recovery, development, injuries
   innings.gd                 Score and scorecard state, lineup, reviews, super-over limits
   fields.gd                  Field presets, the 30-yard circle, fielding restrictions
   match_engine.gd            Toss, innings flow, result
@@ -305,9 +319,11 @@ scripts/ui/                  FM24-style interface
   home_screen.gd             Next match, last result, table, news, new career
   inbox_screen.gd            All news
   squad_screen.gd            Squad list with form/fitness/stats, player profile
-  tactics_screen.gd          Selection (XI, reserves, warnings), batting order and roles,
-                             bowling plan, match instructions
-  match_screen.gd            Match Day (league fixtures and friendlies)
+  tactics_screen.gd          One page: XI in batting order with roles (drag and drop),
+                             reserves, selection check, bowling plan, match instructions
+  training_screen.gd         Team focus and intensity, individual focus, latest report
+  match_screen.gd            Match Day (league fixtures and friendlies), wagon wheel,
+                             innings break, post-match report
   field_view.gd              2D ground view
   fixtures_screen.gd         Club and competition fixtures and results
   competition_screen.gd      League table, play-offs, leading players
@@ -318,8 +334,9 @@ tests/
   season_test.gd             Plays two seasons; checks table, play-offs, transfers, the
                              rollover between them, and save/load
   engine_test.gd             Super overs, DRS, manager choices, fields, handedness matchups
-  ui_smoke.gd                Plays fixtures through Continue, uses the match controls and
-                             review prompts, and opens every screen/tab
+  ui_smoke.gd                Plays fixtures through Continue (Tactics, Start Match, innings
+                             break, report, Done), uses drag and drop, training, the match
+                             controls and review prompts, and opens every screen/tab
 ```
 
 ## How a delivery is decided
@@ -341,19 +358,24 @@ bowled, lbw, stumped and run out.
   right-hander) and left-arm pace angling across a right-hander help the bowler; spin turning
   into the bat helps the batter; a left-right partnership disrupts the bowler's line. The 2D
   view mirrors the field for left-handers.
-- **Fields** (`fields.gd`): presets (Attacking, Balanced, Defensive, Off-side, Leg-side,
-  Death) or your own, set from Match Day's Instructions card or by clicking a fielder on the
+- **Fields** (`fields.gd`): presets (Attacking, Balanced, Middle overs, Defensive, Off-side,
+  Leg-side, Death) or your own, set from Match Day's Instructions card or by clicking a fielder on the
   2D view and then where they should stand. The real 30-yard circle and restrictions (2 out in
   the powerplay, 5 after) are enforced; extra boundary riders are brought in. The field
   matters: boundary riders near a shot can cut off fours and catch sixes on the rope, ring
   fielders stop singles, gaps turn ones into twos, close catchers turn edges into wickets, and
   catches go to where a fielder actually stands.
+- **Captain's choice** follows the phase: Balanced in the powerplay, Middle overs (no slip,
+  four back) after it, Death at the end, Attacking or Defensive with those approaches. The
+  Field picker shows which one the captain is using.
+- **Wagon wheel**: tick it on Match Day to draw the striker's scoring shots this match on the
+  ground, with their off/leg split and favourite area, to help set the field.
 - **Bowling changes**: pick who bowls the next over (or leave it to the captain).
 - **Batting order on the fly**: "Next in" sends any waiting batter in at the next wicket.
 - **DRS**: umpires get about 1 in 10 given-out lbws/catches behind wrong, and some shouts
   given not out were out. Each side has 2 unsuccessful reviews per innings (1 per super over);
-  a successful review is kept. When it's your call the match pauses and the commentary bar
-  asks Review / Accept Call; AI captains review most bad decisions and some good ones.
+  a successful review is kept. When it's your call the match pauses, the ground shows the
+  appealed ball, and the commentary bar asks Review / Accept Call; AI captains review most bad decisions and some good ones.
 
 ## In-match meters (`match_dynamics.gd`)
 
@@ -374,6 +396,10 @@ Auto / Attack / All Out) or bowling approach (Auto / Defensive / Balanced / Atta
 also changes the field).
 
 ## Tactics (`tactics.gd`, Tactics screen)
+
+Everything is on one page. Drag XI rows to change the batting order, drag a reserve onto an XI
+player to swap them (or into the XI's empty space when it's short), and drag an XI player
+onto Reserves to drop them; Pick and Drop buttons do the same.
 
 - **Batting order**: the team's `players` order. Changing it mid-match changes who comes in next.
 - **Batting roles** add intent per phase: Balanced, Anchor, Aggressor, Pinch Hitter, Finisher.

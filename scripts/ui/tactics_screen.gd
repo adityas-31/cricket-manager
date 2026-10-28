@@ -1,18 +1,21 @@
-extends VBoxContainer
-## Tactics, FM-style. Selection: pick the XI from the squad (or let the assistant do it),
-## with injury and fitness warnings. Roles & Plan: the batting order with a role per batter,
-## the bowling plan, and the instructions every match starts with. Changes apply at once,
-## even mid-match: reordering changes who comes in next.
-
-const VIEWS := ["Selection", "Roles & Plan"]
+extends ScrollContainer
+## Tactics, FM-style, all on one page: the XI in batting order with a role per batter, the
+## reserves, a selection check, the bowling plan and the instructions every match starts with.
+##
+## Drag and drop does the selection: drag XI rows up and down to change the batting order,
+## drag a reserve onto an XI player to swap them (or into the XI's empty space when it's
+## short), and drag an XI player onto the reserves to drop them. Pick/Drop buttons do the same.
+## Changes apply at once, even mid-match: reordering changes who comes in next.
+##
+## On a match day the club comes here first (Continue then reads "Start Match").
 
 var app: Node
 
-var _views := {}
+var _page: VBoxContainer
+var _next_match: Label
 var _xi: VBoxContainer
 var _reserves: VBoxContainer
 var _check: VBoxContainer
-var _order: VBoxContainer
 var _plan: VBoxContainer
 var _defaults: VBoxContainer
 
@@ -22,123 +25,140 @@ func title() -> String:
 
 
 func subtitle() -> String:
-	return "%s  ·  Selection, roles and bowling plan" % app.club.name
+	if app.season.user_match_pending():
+		return "%s  ·  Pick the XI and plan for today's match, then press Start Match" % app.club.name
+	return "%s  ·  Selection, batting order, roles and bowling plan" % app.club.name
 
 
 func on_shown() -> void:
-	_build_selection()
-	_build_order()
+	_build_next_match()
+	_build_xi()
+	_build_reserves()
+	_build_check()
 	_build_plan()
 	_build_defaults()
 
 
 func _ready() -> void:
-	add_theme_constant_override("separation", 10)
-	add_child(UIKit.sub_nav(VIEWS, _show_view))
-	var stack := Control.new()
-	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(stack)
-	_views[VIEWS[0]] = _build_selection_view()
-	_views[VIEWS[1]] = _build_plan_view()
-	for v in _views.values():
-		v.set_anchors_preset(Control.PRESET_FULL_RECT)
-		stack.add_child(v)
-	_show_view(VIEWS[0])
+	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_page = VBoxContainer.new()
+	_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_page.add_theme_constant_override("separation", 12)
+	add_child(_page)
 
+	_next_match = UIKit.label("", 15)
+	_next_match.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_page.add_child(_next_match)
 
-func _show_view(view: String) -> void:
-	for key in _views:
-		_views[key].visible = key == view
-	if is_inside_tree() and app:
-		on_shown()
-
-
-func _build_selection_view() -> Control:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 14)
+	_page.add_child(h)
+
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 12)
 	h.add_child(left)
-	var xi_card := UIKit.card("Playing XI")
+	var xi_card := UIKit.card("Playing XI  ·  Batting Order")
+	xi_card.set_drag_forwarding(Callable(), _can_drop_on_xi.bind(-1), _drop_on_xi.bind(-1))
 	left.add_child(xi_card)
 	_xi = UIKit.content(xi_card)
 	var check_card := UIKit.card("Selection Check")
-	check_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(check_card)
 	_check = UIKit.content(check_card)
-	var reserves_card := UIKit.card("Reserves")
-	reserves_card.custom_minimum_size.x = 560
-	h.add_child(reserves_card)
-	_reserves = UIKit.content(reserves_card)
-	return h
-
-
-func _build_plan_view() -> Control:
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 14)
-
-	var left := VBoxContainer.new()
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", 12)
-	h.add_child(left)
-	var order_card := UIKit.card("Batting Order")
-	left.add_child(order_card)
-	_order = UIKit.content(order_card)
-	left.add_child(_role_guide())
+	var defaults_card := UIKit.card("Match Instructions")
+	left.add_child(defaults_card)
+	_defaults = UIKit.content(defaults_card)
 
 	var right := VBoxContainer.new()
-	right.custom_minimum_size.x = 590
+	right.custom_minimum_size.x = 560
 	right.add_theme_constant_override("separation", 12)
 	h.add_child(right)
+	var reserves_card := UIKit.card("Reserves")
+	reserves_card.set_drag_forwarding(Callable(), _can_drop_on_reserves, _drop_on_reserves)
+	right.add_child(reserves_card)
+	_reserves = UIKit.content(reserves_card)
 	var plan_card := UIKit.card("Bowling Plan")
 	right.add_child(plan_card)
 	_plan = UIKit.content(plan_card)
-	var defaults_card := UIKit.card("Match Instructions")
-	defaults_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(defaults_card)
-	_defaults = UIKit.content(defaults_card)
-	return h
 
 
-# --- selection -------------------------------------------------------------------
+# --- next match -------------------------------------------------------------------
 
-func _build_selection() -> void:
+func _build_next_match() -> void:
+	var s: Season = app.season
+	var f: Dictionary = s.user_fixture_today() if s.user_match_pending() else s.next_user_fixture()
+	_next_match.visible = not f.is_empty()
+	if f.is_empty():
+		return
+	var when := "Today" if f.day == s.day else s.date_text(f.day)
+	_next_match.text = "%s:  %s v %s  ·  %s  ·  at %s, %s pitch" % [when, f.home.name, f.away.name, s.stage_text(f),
+		f.home.name, str(f.home.home_pitch).capitalize()]
+	_next_match.add_theme_color_override("font_color", UIKit.WARNING if f.day == s.day else UIKit.TEXT_DIM)
+
+
+# --- XI and batting order -----------------------------------------------------------
+
+func _build_xi() -> void:
 	var team: CricketTeam = app.club
 	var s: Season = app.season
-
 	UIKit.clear(_xi)
-	_xi.add_child(_header([["#", 22], ["Player", 0], ["Bat", 36], ["Bowl", 38], ["Cond", 46], ["Form", 40], ["Status", 84], ["", 64]]))
+	_xi.add_child(_header([["#", 22], ["", 16], ["Player", 0], ["Bat", 36], ["Bowl", 38], ["Cond", 46], ["Form", 40],
+		["Status", 84], ["Role", 140], ["", 56]]))
 	for i in team.players.size():
 		var p: CricketPlayer = team.players[i]
 		var h := _row(i)
 		h.add_child(_cell(str(i + 1), 22, UIKit.TEXT_DIM))
+		h.add_child(_cell("≡", 16, UIKit.TEXT_DIM, true))
 		_player_cells(h, p, s)
-		h.add_child(_action_button("Drop", false, func():
-			team.players.erase(p)
-			GameLog.event("selection", {"action": "drop", "player": p.name})
-			on_shown()))
-		_xi.add_child(h.get_parent())
+		h.add_child(_role_picker(Tactics.BAT_ROLES, Tactics.bat_role(team, p), func(role): team.bat_roles[p] = role))
+		h.add_child(_action_button("Drop", false, _drop.bind(p)))
+		var row: Control = h.get_parent()
+		row.tooltip_text = "Drag to change the batting order, or onto Reserves to drop"
+		row.set_drag_forwarding(_drag_data.bind(row, p, "xi"), _can_drop_on_xi.bind(i), _drop_on_xi.bind(i))
+		_xi.add_child(row)
+	if team.players.size() < CricketTeam.XI_SIZE:
+		_xi.add_child(_hint("%d of %d picked: drag a reserve here." % [team.players.size(), CricketTeam.XI_SIZE]))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	var suggest := Button.new()
+	suggest.text = "Suggest Roles"
+	suggest.tooltip_text = "Give every batter the role that suits their attributes and place in the order"
+	suggest.pressed.connect(func():
+		Tactics.suggest_batting(team)
+		_build_xi())
+	actions.add_child(suggest)
+	actions.add_child(_hint("Drag rows to reorder. Hover a role for what it does."))
+	_xi.add_child(actions)
 
+
+func _build_reserves() -> void:
+	var team: CricketTeam = app.club
+	var s: Season = app.season
 	UIKit.clear(_reserves)
-	_reserves.add_child(_header([["Player", 0], ["Bat", 36], ["Bowl", 38], ["Cond", 46], ["Form", 40], ["Status", 84], ["", 64]]))
+	_reserves.add_child(_header([["", 16], ["Player", 0], ["Bat", 36], ["Bowl", 38], ["Cond", 46], ["Form", 40],
+		["Status", 84], ["", 56]]))
 	var bench := team.reserves()
 	bench.sort_custom(func(a, b): return maxf(a.batting_rating(), a.bowling_rating()) > maxf(b.batting_rating(), b.bowling_rating()))
 	var full := team.players.size() >= CricketTeam.XI_SIZE
 	for i in bench.size():
 		var p: CricketPlayer = bench[i]
 		var h := _row(i)
+		h.add_child(_cell("≡", 16, UIKit.TEXT_DIM, true))
 		_player_cells(h, p, s)
-		var pick := _action_button("Pick", full or s.is_injured(p), func():
-			team.players.append(p)
-			GameLog.event("selection", {"action": "pick", "player": p.name})
-			on_shown())
+		var pick := _action_button("Pick", full or s.is_injured(p), _pick.bind(p, -1))
 		if full:
-			pick.tooltip_text = "Drop someone from the XI first"
+			pick.tooltip_text = "XI full: drag onto an XI player to swap"
 		h.add_child(pick)
-		_reserves.add_child(h.get_parent())
-	_reserves.add_child(_hint("New picks bat at the bottom of the order; rearrange them under Roles & Plan."))
+		var row: Control = h.get_parent()
+		row.tooltip_text = "Injured" if s.is_injured(p) else "Drag onto an XI player to swap them"
+		if not s.is_injured(p):
+			row.set_drag_forwarding(_drag_data.bind(row, p, "reserve"), _can_drop_on_reserves, _drop_on_reserves)
+		_reserves.add_child(row)
 
+
+func _build_check() -> void:
+	var team: CricketTeam = app.club
+	var s: Season = app.season
 	UIKit.clear(_check)
 	var problems := Selection.issues(team, s)
 	if problems.is_empty():
@@ -162,7 +182,7 @@ func _build_selection() -> void:
 	assistant.toggled.connect(func(on): team.assistant_selects = on)
 	actions.add_child(assistant)
 	_check.add_child(actions)
-	_check.add_child(_hint("Injured players in your XI are replaced automatically at kick-off. Tired players bowl and field worse and get injured more often."))
+	_check.add_child(_hint("Injured players in your XI are replaced automatically at the start. Tired players bowl and field worse and get injured more often."))
 
 
 func _player_cells(h: HBoxContainer, p: CricketPlayer, s: Season) -> void:
@@ -187,42 +207,83 @@ func _player_cells(h: HBoxContainer, p: CricketPlayer, s: Season) -> void:
 	h.add_child(_cell(status, 84, colour, false, 13))
 
 
-func _action_button(text: String, disabled: bool, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.disabled = disabled
-	b.custom_minimum_size.x = 64
-	b.add_theme_font_size_override("font_size", 12)
-	b.pressed.connect(action)
-	return b
+# --- selection changes (buttons and drag and drop) -----------------------------------
+
+func _drop(p: CricketPlayer) -> void:
+	app.club.players.erase(p)
+	GameLog.event("selection", {"action": "drop", "player": p.name})
+	on_shown()
 
 
-func _build_order() -> void:
-	UIKit.clear(_order)
-	var team: CricketTeam = app.club
-	_order.add_child(_header([["#", 22], ["Player", 0], ["Tech", 40], ["Pow", 40], ["Agg", 40], ["Role", 150], ["", 76]]))
-	for i in team.players.size():
-		var p: CricketPlayer = team.players[i]
-		var h := _row(i)
-		h.add_child(_cell(str(i + 1), 22, UIKit.TEXT_DIM))
-		h.add_child(_cell(p.name + ("  †" if p.is_keeper() else ""), 0))
-		for attr in ["technique", "power", "aggression"]:
-			h.add_child(_cell("%d" % roundi(p.a(attr)), 40, UIKit.attr_colour(p.a(attr)), true))
-		h.add_child(_role_picker(Tactics.BAT_ROLES, Tactics.bat_role(team, p), func(role): team.bat_roles[p] = role))
-		var up := _small_button("▲", i == 0, _move.bind(i, -1))
-		var down := _small_button("▼", i == team.players.size() - 1, _move.bind(i, 1))
-		h.add_child(up)
-		h.add_child(down)
-		_order.add_child(h.get_parent())
-	var actions := HBoxContainer.new()
-	var suggest := Button.new()
-	suggest.text = "Suggest Roles"
-	suggest.pressed.connect(func():
-		Tactics.suggest_batting(team)
-		_build_order())
-	actions.add_child(suggest)
-	_order.add_child(actions)
+## Adds a reserve to the XI at a batting position (-1: the bottom).
+func _pick(p: CricketPlayer, at: int) -> void:
+	var players: Array = app.club.players
+	if players.size() >= CricketTeam.XI_SIZE:
+		return
+	players.insert(players.size() if at < 0 else mini(at, players.size()), p)
+	GameLog.event("selection", {"action": "pick", "player": p.name})
+	on_shown()
 
+
+## A reserve takes an XI player's place in the batting order.
+func _swap(reserve: CricketPlayer, out: CricketPlayer) -> void:
+	var players: Array = app.club.players
+	players[players.find(out)] = reserve
+	GameLog.event("selection", {"action": "swap", "player": reserve.name, "for": out.name})
+	on_shown()
+
+
+## Moves an XI player to another batting position.
+func _move_to(from: int, to: int) -> void:
+	var players: Array = app.club.players
+	if from == to or from < 0 or from >= players.size():
+		return
+	var p = players.pop_at(from)
+	players.insert(clampi(to, 0, players.size()), p)
+	GameLog.event("selection", {"action": "reorder", "player": p.name, "position": players.find(p) + 1})
+	on_shown()
+
+
+func _move(index: int, step: int) -> void:
+	_move_to(index, index + step)
+
+
+func _drag_data(_at: Vector2, row: Control, p: CricketPlayer, from: String) -> Variant:
+	var preview := PanelContainer.new()
+	preview.add_theme_stylebox_override("panel", UIKit.flat(app.club.colour.darkened(0.2), 4, 12, 6))
+	preview.add_child(UIKit.label(p.name, 14, Color.WHITE))
+	row.set_drag_preview(preview)
+	return {"player": p, "from": from}
+
+
+## index: the XI row dropped on, or -1 for the XI card's empty space.
+func _can_drop_on_xi(_at: Vector2, data: Variant, index: int) -> bool:
+	if typeof(data) != TYPE_DICTIONARY or not data.has("from"):
+		return false
+	if data.from == "xi":
+		return true
+	return index >= 0 or app.club.players.size() < CricketTeam.XI_SIZE
+
+
+func _drop_on_xi(_at: Vector2, data: Variant, index: int) -> void:
+	var players: Array = app.club.players
+	if data.from == "xi":
+		_move_to(players.find(data.player), players.size() - 1 if index < 0 else index)
+	elif index >= 0 and players.size() >= CricketTeam.XI_SIZE:
+		_swap(data.player, players[index])
+	else:
+		_pick(data.player, index)
+
+
+func _can_drop_on_reserves(_at: Vector2, data: Variant) -> bool:
+	return typeof(data) == TYPE_DICTIONARY and data.get("from", "") == "xi"
+
+
+func _drop_on_reserves(_at: Vector2, data: Variant) -> void:
+	_drop(data.player)
+
+
+# --- bowling plan and instructions ---------------------------------------------------
 
 func _build_plan() -> void:
 	UIKit.clear(_plan)
@@ -281,32 +342,7 @@ func _build_defaults() -> void:
 	_defaults.add_child(_hint("New matches start with these. Change them during a match from the Instructions card on Match Day."))
 
 
-func _move(index: int, step: int) -> void:
-	var players: Array = app.club.players
-	var other := index + step
-	var p = players[index]
-	players[index] = players[other]
-	players[other] = p
-	_build_order()
-
-
 # --- widgets -----------------------------------------------------------------
-
-func _role_guide() -> Control:
-	var c := UIKit.card("Batting Roles")
-	var body := UIKit.content(c)
-	for role in Tactics.BAT_ROLES:
-		var h := HBoxContainer.new()
-		h.add_theme_constant_override("separation", 12)
-		var name_label := UIKit.label(role, 13)
-		name_label.custom_minimum_size.x = 110
-		h.add_child(name_label)
-		var desc := _hint(Tactics.BAT_ROLES[role].desc)
-		desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(desc)
-		body.add_child(h)
-	return c
-
 
 ## A table-style row; returns its HBox (the PanelContainer is its parent).
 func _row(index: int) -> HBoxContainer:
@@ -319,6 +355,16 @@ func _header(columns: Array) -> Control:
 
 func _cell(text: String, width: float, colour := UIKit.TEXT, centred := false, size := 14) -> Label:
 	return UIKit.grid_cell(text, width, colour, centred, size)
+
+
+func _action_button(text: String, disabled: bool, action: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.disabled = disabled
+	b.custom_minimum_size.x = 56
+	b.add_theme_font_size_override("font_size", 12)
+	b.pressed.connect(action)
+	return b
 
 
 func _role_picker(roles: Dictionary, current: String, apply: Callable) -> OptionButton:
@@ -335,16 +381,6 @@ func _role_picker(roles: Dictionary, current: String, apply: Callable) -> Option
 		apply.call(keys[i])
 		o.tooltip_text = roles[keys[i]].desc)
 	return o
-
-
-func _small_button(text: String, disabled: bool, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.disabled = disabled
-	b.custom_minimum_size = Vector2(34, 0)
-	b.add_theme_font_size_override("font_size", 11)
-	b.pressed.connect(action)
-	return b
 
 
 func _toggle(text: String, active: bool, apply: Callable) -> Button:

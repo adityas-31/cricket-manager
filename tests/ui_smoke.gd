@@ -44,9 +44,35 @@ func _process(_delta: float) -> bool:
 	var auto: Array = tactics._check.find_children("*", "Button", true, false).filter(func(b): return b.text == "Auto Select")
 	auto[0].pressed.emit()
 	assert(club.players.size() == 11, "Auto Select picked an XI")
-	tactics._show_view("Roles & Plan")
-	tactics._show_view("Selection")
 	print("selection ok: %d in XI, %d reserves" % [club.players.size(), club.reserves().size()])
+
+	# Drag and drop: a reserve onto the XI's no. 3 swaps them; an XI player dragged to the
+	# reserves is dropped, then dragged back into the empty space.
+	var fit_reserves := club.reserves().filter(func(p): return not season.is_injured(p))
+	var sub: CricketPlayer = fit_reserves[0]
+	var swapped: CricketPlayer = club.players[2]
+	assert(tactics._can_drop_on_xi(Vector2.ZERO, {"player": sub, "from": "reserve"}, 2), "reserve can drop on XI row")
+	tactics._drop_on_xi(Vector2.ZERO, {"player": sub, "from": "reserve"}, 2)
+	assert(club.players[2] == sub and not swapped in club.players, "drag swap")
+	tactics._drop_on_reserves(Vector2.ZERO, {"player": sub, "from": "xi"})
+	assert(not sub in club.players and club.players.size() == 10, "drag to reserves drops")
+	assert(not tactics._can_drop_on_reserves(Vector2.ZERO, {"player": swapped, "from": "reserve"}), "reserve onto reserves")
+	tactics._drop_on_xi(Vector2.ZERO, {"player": swapped, "from": "reserve"}, -1)
+	assert(club.players.size() == 11 and club.players[-1] == swapped, "drag into empty XI space picks")
+	var opener: CricketPlayer = club.players[0]
+	tactics._drop_on_xi(Vector2.ZERO, {"player": opener, "from": "xi"}, 3)
+	assert(club.players[3] == opener, "drag reorders the batting order")
+	tactics._move_to(3, 0)
+	print("drag and drop ok")
+
+	# Training: batting focus at hard intensity, with one player on their own bowling focus.
+	_app.show_screen("training")
+	var training: Node = _app._screens["training"]
+	training._set_plan("focus", "Batting")
+	training._set_plan("intensity", "Hard")
+	season.training_focus[club.squad[-1]] = "Bowling"
+	training.on_shown()
+	_app.show_screen("tactics")
 
 	# Injury cover: injure a picked player and check the XI is fixed at kick-off.
 	var hurt: CricketPlayer = club.players[0]
@@ -63,8 +89,14 @@ func _process(_delta: float) -> bool:
 	tactics._build_plan()
 	print("tactics ok: %s bats 5th as %s" % [seventh.surname(), Tactics.bat_role(club, seventh)])
 
-	# Play three rounds the way a player would: Continue to Match Day, play, Continue on.
+	# Play three rounds the way a player would: Continue to Tactics, Start Match, play
+	# (pausing at the innings break), read the report, then Done back to Home.
 	for round in 3:
+		if round > 0:
+			assert(_app._current == _app._screens["home"], "Done should go back to Home")
+			_app._on_continue()
+			assert(_app._current == tactics, "Continue on a match day should open Tactics first")
+		assert(_app.default_continue_label() == "Start Match", "Tactics offers Start Match")
 		_app._on_continue()
 		var match_screen: Node = _app._screens["match"]
 		assert(_app._current == match_screen, "Continue should open Match Day on a match day")
@@ -81,11 +113,17 @@ func _process(_delta: float) -> bool:
 			_use_match_controls(match_screen, club)
 		_finish(match_screen)
 		assert(not match_screen.fixture.result.is_empty(), "result recorded into the season")
+		assert(match_screen._views["Report"].visible, "the report opens when the match ends")
+		assert(match_screen.continue_label() == "Done", "Continue reads Done after the match")
 		for view in match_screen.VIEWS:
 			match_screen._show_view(view)
 		print("%s: %s" % [season.date_text(), match_screen.fixture.result.text])
 		_app._on_continue()
 	assert(season.fixtures.filter(func(f): return not f.result.is_empty()).size() == 12, "3 rounds of 4 fixtures played")
+	assert(_innings_breaks >= 3, "play paused at each innings break")
+	assert(season.last_training.days > 0 and season.news.any(func(n): return n.title == "Training report"), "training ran")
+	_app.show_screen("training")
+	print("training ok: %s" % Training.summary(season.last_training, season))
 
 	# A friendly doesn't touch the season.
 	var match_screen: Node = _app._screens["match"]
@@ -167,6 +205,8 @@ func _process(_delta: float) -> bool:
 
 	var reloaded := Season.load_from(SAVE)
 	assert(reloaded and reloaded.day == season.day, "autosave matches the live season")
+	assert(reloaded.training == season.training and reloaded.training_focus.size() == season.training_focus.size(),
+		"training plan saved")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
 	_check_log()
 	print("UI SMOKE PASSED (%d review prompts answered)" % _reviews_answered)
@@ -174,6 +214,7 @@ func _process(_delta: float) -> bool:
 
 
 var _reviews_answered := 0
+var _innings_breaks := 0
 const LOG_DIR := "user://smoke_logs"
 
 
@@ -186,7 +227,8 @@ func _check_log() -> void:
 		var e = JSON.parse_string(line)
 		assert(typeof(e) == TYPE_DICTIONARY and e.has("type") and e.has("t"), "log line is JSON with a type")
 		counts[e.type] = counts.get(e.type, 0) + 1
-	for kind in ["session_start", "screen", "advance", "match_start", "match_end", "decision", "result", "transfer", "selection", "note"]:
+	for kind in ["session_start", "screen", "advance", "match_start", "match_end", "decision", "result", "transfer",
+			"selection", "note", "training", "training_plan"]:
 		assert(counts.get(kind, 0) > 0, "log has %s events" % kind)
 	print("log ok: %s" % JSON.stringify(counts))
 	GameLog.stop()
@@ -208,6 +250,9 @@ func _finish(match_screen: Node) -> void:
 	while not match_screen.engine.finished and guard < 50:
 		guard += 1
 		match_screen._play("end")
+		if match_screen._break:
+			_innings_breaks += 1
+			assert(match_screen.continue_label().begins_with("Start"), "innings break offers to start the next innings")
 		if not match_screen.engine.pending_review.is_empty():
 			assert(match_screen._review_box.visible, "review prompt shown")
 			match_screen._resolve_review(_reviews_answered % 2 == 0)

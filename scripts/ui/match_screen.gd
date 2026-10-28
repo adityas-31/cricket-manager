@@ -7,7 +7,7 @@ extends VBoxContainer
 ## days it hosts friendlies (format and pitch pickers), which don't count for anything.
 
 const FORMATS := ["T20", "ODI"]
-const VIEWS := ["Match", "Scorecard", "Commentary"]
+const VIEWS := ["Match", "Scorecard", "Commentary", "Report"]
 
 var app: Node
 var engine: MatchEngine
@@ -17,6 +17,10 @@ var auto_play := false
 var _timer := 0.0
 var _last_event := {}
 var _views := {}
+var _view_buttons := {}
+var _break := false  # paused between innings until the manager carries on
+var _news_before := 0  # season news count before the result went in, for the report
+var _report: VBoxContainer
 var _scoreboard: HBoxContainer
 var _field: FieldView
 var _bar: PanelContainer
@@ -24,6 +28,8 @@ var _bar_label: Label
 var _review_box: HBoxContainer
 var _decisions := {}  # decision kind -> count this match, for the play log
 var _end_logged := false
+var _shots_by_batter := {}  # CricketPlayer -> scoring shots this match, for the wagon wheel
+var _wagon_toggle: CheckBox
 var _batting: VBoxContainer
 var _bowling: VBoxContainer
 var _instructions: VBoxContainer
@@ -48,17 +54,25 @@ func subtitle() -> String:
 
 
 func continue_label() -> String:
-	if fixture.is_empty() or engine.finished:
+	if engine.finished:
+		return "Done" if not fixture.is_empty() else app.default_continue_label()
+	if fixture.is_empty():
 		return app.default_continue_label()
+	if _break:
+		return "Start Super Over" if engine.current().super_over else "Start 2nd Innings"
 	return "Pause" if auto_play else "Continue"
 
 
 func on_continue() -> void:
+	if engine.finished and not fixture.is_empty():
+		app.finish_match_day()
+		return
 	if fixture.is_empty() or engine.finished:
 		auto_play = false
 		app.advance()
 		return
-	auto_play = not auto_play
+	auto_play = true if _break else not auto_play
+	_break = false
 	_timer = 0.0
 	app.refresh_header()
 
@@ -78,7 +92,7 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 10)
 	_build()
 	if "--demo" in OS.get_cmdline_user_args():
-		_speed.value = _speed.min_value
+		_speed.value = _speed.max_value
 		auto_play = true
 
 
@@ -86,7 +100,7 @@ func _process(delta: float) -> void:
 	if engine == null or not auto_play or engine.finished:
 		return
 	_timer += delta
-	if _timer >= _speed.value:
+	if _timer >= _seconds_per_ball():
 		_timer = 0.0
 		_play("ball", true)
 
@@ -118,6 +132,9 @@ func _start_fixture(f: Dictionary) -> void:
 
 
 func _reset_log(intro: String) -> void:
+	_shots_by_batter = {}
+	_break = false
+	_select_view("Match")
 	_last_event = {}
 	_log.clear()
 	_log.append_text("[color=#9aa0a6]%s[/color]\n" % intro)
@@ -127,6 +144,7 @@ func _reset_log(intro: String) -> void:
 func _play(mode: String, animate := false) -> void:
 	if engine.finished or not engine.pending_review.is_empty():
 		return
+	_break = false
 	while true:
 		var e := engine.bowl_ball()
 		if e.has("review_pending"):
@@ -134,6 +152,8 @@ func _play(mode: String, animate := false) -> void:
 			break
 		_last_event = e
 		_log_event(e)
+		if _innings_break(e):
+			break
 		if engine.finished or mode == "ball" or (mode == "over" and (e.end_of_over or e.innings_complete)):
 			break
 	_after_play(animate or mode == "ball")
@@ -148,18 +168,31 @@ func _resolve_review(take: bool) -> void:
 		"was_wrong": appeal.given_out != appeal.truly_out, "overturned": review.get("overturned", false)})
 	_last_event = e
 	_log_event(e)
+	_innings_break(e)
 	_after_play(true)
+
+
+## Stops play at the end of an innings (not the match) so the manager can read the scorecard
+## and set up for the chase before carrying on.
+func _innings_break(e: Dictionary) -> bool:
+	if not e.get("innings_complete", false) or engine.finished:
+		return false
+	_break = true
+	auto_play = false
+	return true
 
 
 func _after_play(animate: bool) -> void:
 	if engine.finished:
 		auto_play = false
 		if not fixture.is_empty() and fixture.result.is_empty():
+			_news_before = app.season.news.size()
 			app.season.record(fixture, engine)
 			app.season.save()
 		var potm := _player_of_match()
 		_log.append_text("[color=#9aa0a6]Player of the match: %s (%.1f)[/color]\n" % [potm.name, _ratings()[potm]])
 		_log_match_end(potm)
+		_select_view("Report")
 	_refresh(animate)
 
 
@@ -218,6 +251,9 @@ func _player_of_match() -> CricketPlayer:
 
 
 func _log_event(e: Dictionary) -> void:
+	if e.get("extra", "") != "wd" and e.get("runs", 0) > 0 and e.get("distance", 0.0) > 0.0:
+		var list: Array = _shots_by_batter.get_or_add(e.batter, [])
+		list.append({"angle": e.angle, "distance": e.distance, "runs": e.runs})
 	var colour := "#e8eaed"
 	if not e.wicket.is_empty():
 		colour = "#ef5350"
@@ -259,6 +295,7 @@ func _build() -> void:
 		b.button_group = group
 		b.button_pressed = v == VIEWS[0]
 		b.pressed.connect(_show_view.bind(v))
+		_view_buttons[v] = b
 		sub.add_child(b)
 
 	_scoreboard = HBoxContainer.new()
@@ -271,6 +308,7 @@ func _build() -> void:
 	_views["Match"] = _build_match_view()
 	_views["Scorecard"] = _build_scorecard_view()
 	_views["Commentary"] = _build_commentary_view()
+	_views["Report"] = _build_report_view()
 	for v in _views.values():
 		v.set_anchors_preset(Control.PRESET_FULL_RECT)
 		stack.add_child(v)
@@ -357,6 +395,16 @@ func _build_scorecard_view() -> Control:
 	return scroll
 
 
+func _build_report_view() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_report = VBoxContainer.new()
+	_report.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_report.add_theme_constant_override("separation", 14)
+	scroll.add_child(_report)
+	return scroll
+
+
 func _build_commentary_view() -> Control:
 	var c := UIKit.card("Commentary")
 	_log = RichTextLabel.new()
@@ -395,17 +443,56 @@ func _build_controls() -> Control:
 	h.add_child(_button("Next Ball", _play.bind("ball", true)))
 	h.add_child(_button("Next Over", _play.bind("over", false)))
 	h.add_child(_button("Sim to End", _play.bind("end", false)))
+	_wagon_toggle = CheckBox.new()
+	_wagon_toggle.text = "Wagon wheel"
+	_wagon_toggle.tooltip_text = "Show where the striker has scored this match"
+	_wagon_toggle.toggled.connect(func(_on): _refresh(false))
+	h.add_child(_wagon_toggle)
 	h.add_child(UIKit.label("Speed", 13, UIKit.TEXT_DIM))
 	_speed = HSlider.new()
-	_speed.min_value = 0.03
-	_speed.max_value = 1.5
-	_speed.step = 0.01
-	_speed.value = 0.8
+	_speed.min_value = 1
+	_speed.max_value = 10
+	_speed.step = 1
+	_speed.value = 4
+	_speed.tick_count = 10
+	_speed.ticks_on_borders = true
 	_speed.custom_minimum_size = Vector2(140, 0)
 	_speed.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_speed.tooltip_text = "Seconds per ball when playing"
+	_speed.tooltip_text = "Match speed: further right is faster"
 	h.add_child(_speed)
 	return bar
+
+
+## Feeds the striker's wagon wheel to the field view when the toggle is on: their scoring
+## shots this match and a summary of where the runs went.
+func _update_wagon() -> void:
+	_field.wagon = []
+	_field.wagon_caption = ""
+	if not _wagon_toggle.button_pressed or engine.finished:
+		return
+	var striker: CricketPlayer = engine.current().striker.player
+	var shots: Array = _shots_by_batter.get(striker, [])
+	_field.wagon = shots
+	var off := 0
+	var total := 0
+	var regions := {}
+	for shot in shots:
+		total += shot.runs
+		if shot.angle > 0.0:
+			off += shot.runs
+		var region := DeliveryModel.region_name(shot.angle, false)
+		regions[region] = regions.get(region, 0) + shot.runs
+	if total == 0:
+		_field.wagon_caption = "%s: no runs yet" % striker.surname()
+		return
+	var best: String = regions.keys().reduce(func(a, b): return a if regions[a] >= regions[b] else b)
+	_field.wagon_caption = "%s: %d runs  ·  off side %d%%, leg side %d%%  ·  most %s (%d)" % [
+		striker.surname(), total, roundi(100.0 * off / total), 100 - roundi(100.0 * off / total), best, regions[best]]
+
+
+## Speed 1 (slowest, 1.5 s a ball) to 10 (fastest, 0.03 s a ball), evenly spaced in feel.
+func _seconds_per_ball() -> float:
+	return 1.5 * pow(0.02, (_speed.value - 1.0) / 9.0)
 
 
 func _button(text: String, action: Callable) -> Button:
@@ -420,6 +507,13 @@ func _show_view(view: String) -> void:
 		_views[key].visible = key == view
 	if view == "Scorecard":
 		_refresh_scorecards()
+	elif view == "Report":
+		_refresh_report()
+
+
+func _select_view(view: String) -> void:
+	_view_buttons[view].button_pressed = true
+	_show_view(view)
 
 
 # --- refresh -----------------------------------------------------------------
@@ -431,11 +525,19 @@ func _refresh(animate: bool) -> void:
 	_refresh_bowling()
 	_refresh_stats()
 	_refresh_bar()
+	_update_wagon()
 	_field.editable = engine.manager_team == app.club and engine.current().bowling_team == app.club \
 		and not engine.finished
-	_field.show_state(engine, _last_event, animate)
+	# While a review waits, show the appealed ball, not the one before it.
+	var shown := _last_event
+	if not engine.pending_review.is_empty():
+		shown = engine.pending_review.result.duplicate()
+		shown.merge(engine.pending_review.meta)
+	_field.show_state(engine, shown, animate)
 	if _views["Scorecard"].visible:
 		_refresh_scorecards()
+	if _views["Report"].visible:
+		_refresh_report()
 	app.refresh_header()
 
 
@@ -598,7 +700,9 @@ func _refresh_instructions() -> void:
 		var current: String = engine.field_choice.get(club, Fields.AUTO)
 		if current == Fields.CUSTOM:
 			fields.append(Fields.CUSTOM)
-		_instructions.add_child(_labelled_picker("FIELD", fields, fields.find(current),
+		# Show which field the captain is using, since it changes with the phase and approach.
+		var field_labels := fields.map(func(f): return "%s (%s)" % [f, engine.field_name(inn)] if f == Fields.AUTO else f)
+		_instructions.add_child(_labelled_picker("FIELD", field_labels, fields.find(current),
 			func(i):
 				engine.set_field(club, fields[i])
 				_decision("field", {"field": fields[i]})
@@ -702,6 +806,16 @@ func _refresh_bar() -> void:
 	if not _last_event.is_empty():
 		text = "%s  %s" % [_last_event.over_label, _last_event.commentary]
 		accent = UIKit.symbol_colour(_last_event.get("symbol", ""))
+	if _break:
+		var done: Innings = engine.innings[-2]
+		var next := engine.current()
+		var chase := "Super over: %s bat first" % next.batting_team.name
+		if next.target > 0:
+			chase = "%s need %d from %s" % [next.batting_team.name, next.target,
+				"the super over" if next.super_over else "%d overs" % (next.max_balls / 6)]
+		text = "Innings break.  %s %s (%s ov).  %s.  Set your approach, then press Continue." % [
+			done.batting_team.short_name, done.score_text(), Innings.overs_text(done.legal_balls), chase]
+		accent = UIKit.WARNING
 	if engine.finished:
 		var potm := _player_of_match()
 		text = "%s.  Player of the match: %s (%.1f)" % [engine.result_text, potm.name, _ratings()[potm]]
@@ -753,6 +867,73 @@ func _refresh_scorecards() -> void:
 		_scorecards.add_child(c)
 	if engine.finished:
 		_scorecards.add_child(_ratings_card())
+
+
+## The post-match report: the result, who decided it, ratings and, for fixtures, what it
+## means for the season and the squad, so there's a pause before the next match.
+func _refresh_report() -> void:
+	UIKit.clear(_report)
+	if engine == null or not engine.finished:
+		_report.add_child(UIKit.label("The match report appears here when the match is over.", 14, UIKit.TEXT_DIM))
+		return
+	var ratings := _ratings()
+	var potm := _player_of_match()
+	var result := UIKit.card("Result")
+	var body := UIKit.content(result)
+	body.add_child(UIKit.label(engine.result_text, 22, UIKit.POSITIVE))
+	for inn: Innings in engine.innings:
+		body.add_child(UIKit.stat_row(("Super over: " if inn.super_over else "") + inn.batting_team.name,
+			"%s (%s ov)" % [inn.score_text(), Innings.overs_text(inn.legal_balls)]))
+	body.add_child(UIKit.stat_row("Player of the match", "%s  %.1f" % [potm.name, ratings[potm]], UIKit.WARNING))
+	body.add_child(UIKit.wrapped(engine.toss_text))
+	_report.add_child(result)
+
+	var performers := UIKit.card("Key Performances")
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	UIKit.content(performers).add_child(h)
+	for inn: Innings in engine.main_innings():
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.add_child(UIKit.label("%s BATTING" % inn.batting_team.short_name, 11, UIKit.TEXT_DIM))
+		var batters := inn.batters.duplicate()
+		batters.sort_custom(func(a, b): return a.runs > b.runs)
+		for b in batters.slice(0, 3):
+			col.add_child(UIKit.stat_row(b.player.name, "%d%s (%d)" % [b.runs, "" if b.out else "*", b.balls]))
+		col.add_child(UIKit.label("%s BOWLING" % inn.bowling_team.short_name, 11, UIKit.TEXT_DIM))
+		var bowlers := inn.bowlers.duplicate()
+		bowlers.sort_custom(func(a, b): return a.wickets > b.wickets if a.wickets != b.wickets else a.runs < b.runs)
+		for b in bowlers.slice(0, 3):
+			col.add_child(UIKit.stat_row(b.player.name, "%d-%d (%s)" % [b.wickets, b.runs, Innings.overs_text(b.balls)]))
+		h.add_child(col)
+	_report.add_child(performers)
+	_report.add_child(_ratings_card())
+	if fixture.is_empty():
+		return
+
+	var season: Season = app.season
+	var outlook := UIKit.card("Season")
+	var ob := UIKit.content(outlook)
+	ob.add_child(UIKit.stat_row("League position", UIKit.ordinal(season.position(app.club))))
+	var next: Dictionary = season.next_user_fixture()
+	ob.add_child(UIKit.stat_row("Next match", "None" if next.is_empty() else "%s v %s, %s" % [
+		season.stage_text(next), season.opponent(next).name, season.date_text(next.day)]))
+	for n in season.news.slice(_news_before):
+		ob.add_child(UIKit.wrapped("%s. %s" % [n.title, n.body], 13, UIKit.TEXT))
+	ob.add_child(UIKit.wrapped("Press Done to go back to Home. Training runs on the days before the next match."))
+	_report.add_child(outlook)
+
+	var fitness := UIKit.card("Squad After the Match")
+	var rows := []
+	for p: CricketPlayer in app.club.players:
+		var c: float = season.condition[p]
+		rows.append([p.name, {"text": "%d%%" % roundi(c), "colour": UIKit.condition_colour(c)},
+			UIKit.form_rating(season.form[p]),
+			{"text": "Injured, %d days" % season.injury_days(p) if season.is_injured(p) else "", "colour": UIKit.NEGATIVE}])
+	UIKit.content(fitness).add_child(UIKit.table([{"title": "Player", "width": 0},
+		{"title": "Condition", "width": 90, "align": "right"}, {"title": "Form", "width": 60, "align": "right"},
+		{"title": "", "width": 140, "align": "right"}], rows))
+	_report.add_child(fitness)
 
 
 ## FM-style player ratings for both sides, best first.

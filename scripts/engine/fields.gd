@@ -20,6 +20,7 @@ const CLOSE := 22.5
 const PRESETS := {
 	"Attacking": [[150, 19], [140, 20], [112, 21], [92, 24], [55, 25], [18, 25], [-20, 25], [-95, 23], [-150, 62]],
 	"Balanced": [[150, 19], [95, 24], [55, 25], [18, 25], [-20, 25], [-60, 25], [-95, 24], [-150, 62], [140, 62]],
+	"Middle overs": [[95, 24], [50, 25], [18, 25], [-20, 25], [-95, 24], [60, 64], [-60, 64], [-150, 62], [140, 62]],
 	"Defensive": [[95, 24], [45, 25], [55, 64], [20, 66], [-20, 66], [-60, 64], [-95, 25], [-150, 62], [128, 24]],
 	"Off-side": [[150, 19], [95, 24], [55, 25], [38, 26], [15, 25], [62, 64], [102, 62], [-22, 25], [-150, 62]],
 	"Leg-side": [[95, 24], [20, 25], [-20, 25], [-55, 25], [-60, 64], [-95, 63], [-150, 62], [-20, 66], [140, 62]],
@@ -27,7 +28,8 @@ const PRESETS := {
 }
 const PRESET_HELP := {
 	"Attacking": "Two slips and a gully, one man out. Edges get caught; gaps get hit.",
-	"Balanced": "A slip, a ring of five, two men back.",
+	"Balanced": "A slip, a ring of five, two men back: the powerplay field.",
+	"Middle overs": "No slip, four men back on both sides: cut off the boundaries, give the single.",
 	"Defensive": "Five on the boundary to stop fours. Singles are easy.",
 	"Off-side": "Seven on the off side for bowling outside off stump.",
 	"Leg-side": "Leg side packed with boundary riders for the short ball.",
@@ -80,7 +82,9 @@ static func auto_preset(approach: int, phase: String) -> String:
 		return "Attacking"
 	if phase == "death":
 		return "Death"
-	return "Defensive" if approach == 0 else "Balanced"
+	if approach == 0:
+		return "Defensive"
+	return "Middle overs" if phase == "middle" else "Balanced"
 
 
 static func angle_gap(a: float, b: float) -> float:

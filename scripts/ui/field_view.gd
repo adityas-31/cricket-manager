@@ -18,6 +18,10 @@ const RECENT_SHOTS := 6
 const PICK_RADIUS := 5.0  # metres
 
 var editable := false
+## The striker's scoring shots this match ({angle, distance, runs}, batter's frame) and a
+## one-line summary, drawn over the field when set: a wagon wheel for setting fields.
+var wagon: Array = []
+var wagon_caption := ""
 
 var _batting_colour := Color.WHITE
 var _bowling_colour := Color.WHITE
@@ -65,8 +69,14 @@ func show_state(engine: MatchEngine, event: Dictionary, animate: bool) -> void:
 	_chaser = -1
 	if this_innings and event.get("extra", "") != "wd" and not event.has("review_pending"):
 		var m := -1.0 if event.batter.left_handed else 1.0
-		_shots.append({"angle": event.angle, "distance": event.distance, "runs": event.runs,
-			"wicket": not event.wicket.is_empty(), "innings": event.innings, "mirror": m})
+		var shot := {"angle": event.angle, "distance": event.distance, "runs": event.runs,
+			"wicket": not event.wicket.is_empty(), "innings": event.innings, "mirror": m,
+			"ball": "%d:%s" % [event.innings, event.over_label]}
+		# The same ball shown again (a review prompt, then its outcome) replaces itself.
+		if not _shots.is_empty() and _shots[-1].ball == shot.ball:
+			_shots[-1] = shot
+		else:
+			_shots.append(shot)
 		if _shots.size() > RECENT_SHOTS:
 			_shots.pop_front()
 		if event.distance > 0.0 and _mirror == m:
@@ -133,6 +143,12 @@ func _draw() -> void:
 		draw_rect(Rect2(to_screen.call(Vector2(-0.12, y - 0.1)), Vector2(0.24, 0.2) * s), Color("3b2a1a"))
 
 	var striker: Vector2 = _batters[0].pos if not _batters.is_empty() else Fields.STRIKER
+	for shot in wagon:
+		var col := _shot_colour({"wicket": false, "runs": shot.runs})
+		col.a = 0.75
+		var end: Vector2 = to_screen.call(_flip(Fields.position([shot.angle, shot.distance])))
+		draw_line(to_screen.call(striker), end, col, 2.0)
+		draw_circle(end, 3.0, col)
 	for i in _shots.size() - 1:
 		var shot: Dictionary = _shots[i]
 		if shot.distance > 0.0:
@@ -176,6 +192,10 @@ func _draw() -> void:
 	var left_label := "LEG" if _mirror > 0.0 else "OFF"
 	draw_string(font, c + Vector2(Fields.BOUNDARY * s - 46, -Fields.BOUNDARY * s + 30), right_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, 0.5))
 	draw_string(font, c + Vector2(-Fields.BOUNDARY * s + 22, -Fields.BOUNDARY * s + 30), left_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 1, 0.5))
+	if wagon_caption != "":
+		var cw := font.get_string_size(wagon_caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		draw_rect(Rect2(Vector2(c.x - cw / 2.0 - 8, 8), Vector2(cw + 16, 22)), Color(0, 0, 0, 0.55))
+		draw_string(font, Vector2(c.x - cw / 2.0, 24), wagon_caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.WHITE)
 	if editable:
 		var hint := "Click a fielder, then click where they should stand"
 		var w := font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
