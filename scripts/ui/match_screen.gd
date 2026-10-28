@@ -22,6 +22,8 @@ var _field: FieldView
 var _bar: PanelContainer
 var _bar_label: Label
 var _review_box: HBoxContainer
+var _decisions := {}  # decision kind -> count this match, for the play log
+var _end_logged := false
 var _batting: VBoxContainer
 var _bowling: VBoxContainer
 var _instructions: VBoxContainer
@@ -100,6 +102,7 @@ func new_match() -> void:
 	engine.manager_team = app.club
 	_reset_log("Friendly. %s. %s pitch, %s." % [engine.toss_text, pitch.capitalize(), fmt.name])
 	_friendly_controls.visible = true
+	_log_match_start("friendly")
 	_refresh(false)
 
 
@@ -111,6 +114,7 @@ func _start_fixture(f: Dictionary) -> void:
 		engine.toss_text, engine.pitch.capitalize()])
 	for line in app.season.last_selection_changes:
 		_log.append_text("[color=#ffca28]Team change: %s[/color]\n" % line)
+	_log_match_start(app.season.stage_text(f))
 
 
 func _reset_log(intro: String) -> void:
@@ -137,7 +141,11 @@ func _play(mode: String, animate := false) -> void:
 
 ## The manager's DRS call on the pending decision.
 func _resolve_review(take: bool) -> void:
+	var appeal: Dictionary = engine.pending_review.result.appeal
 	var e := engine.resolve_review(take)
+	var review: Dictionary = e.get("review", {})
+	_decision("review", {"taken": take, "call": appeal.kind, "given_out": appeal.given_out,
+		"was_wrong": appeal.given_out != appeal.truly_out, "overturned": review.get("overturned", false)})
 	_last_event = e
 	_log_event(e)
 	_after_play(true)
@@ -151,7 +159,49 @@ func _after_play(animate: bool) -> void:
 			app.season.save()
 		var potm := _player_of_match()
 		_log.append_text("[color=#9aa0a6]Player of the match: %s (%.1f)[/color]\n" % [potm.name, _ratings()[potm]])
+		_log_match_end(potm)
 	_refresh(animate)
+
+
+# --- play log ----------------------------------------------------------------
+
+func _log_match_start(stage: String) -> void:
+	_decisions = {}
+	_end_logged = false
+	GameLog.event("match_start", {"stage": stage, "date": app.season.date_text(), "format": engine.format.name,
+		"pitch": engine.pitch, "home": engine.teams[0].name, "away": engine.teams[1].name, "toss": engine.toss_text,
+		"xi": app.club.players.map(func(p): return p.name)})
+
+
+func _log_match_end(potm: CricketPlayer) -> void:
+	if _end_logged:
+		return
+	_end_logged = true
+	GameLog.event("match_end", {"stage": "friendly" if fixture.is_empty() else app.season.stage_text(fixture),
+		"result": engine.result_text, "scores": engine.innings.map(func(i): return "%s%s %s (%s)" % [
+			"SO " if i.super_over else "", i.batting_team.short_name, i.score_text(), Innings.overs_text(i.legal_balls)]),
+		"potm": potm.name, "super_overs": engine.super_overs, "decisions": _decisions,
+		"position": app.season.position(app.club)})
+
+
+## Logs one of the manager's in-match decisions, with the match situation.
+func _decision(kind: String, details: Dictionary = {}) -> void:
+	_decisions[kind] = _decisions.get(kind, 0) + 1
+	var inn := engine.current()
+	var event := {"kind": kind, "over": Innings.overs_text(inn.legal_balls),
+		"score": "%s %s" % [inn.batting_team.short_name, inn.score_text()], "batting": inn.batting_team == app.club}
+	event.merge(details)
+	GameLog.event("decision", event)
+
+
+## The match situation, for play-test notes written while this screen is open.
+func log_context() -> Dictionary:
+	if engine == null:
+		return {}
+	var inn := engine.current()
+	return {"match": "%s v %s" % [engine.teams[0].short_name, engine.teams[1].short_name],
+		"score": "%s %s (%s)" % [inn.batting_team.short_name, inn.score_text(), Innings.overs_text(inn.legal_balls)],
+		"finished": engine.finished, "last_ball": _last_event.get("commentary", "")}
 
 
 ## Ratings for the finished match (the season's stored copy for fixtures).
@@ -256,6 +306,7 @@ func _build_match_view() -> Control:
 	_field = FieldView.new()
 	_field.field_edited.connect(func(spots):
 		engine.set_field(app.club, Fields.CUSTOM, spots)
+		_decision("move_fielder")
 		_refresh(false))
 	ground.add_child(_field)
 	_bar = PanelContainer.new()
@@ -518,6 +569,7 @@ func _refresh_instructions() -> void:
 					Tactics.bat_role(inn.batting_team, p)]), 0,
 				func(i):
 					inn.promote(waiting[i])
+					_decision("next_batter", {"player": waiting[i].name})
 					_refresh(false)))
 	else:
 		_instructions.add_child(UIKit.label("BOWLING APPROACH", 11, UIKit.TEXT_DIM))
@@ -539,6 +591,7 @@ func _refresh_instructions() -> void:
 			labels, bowlers.find(chosen) + 1,
 			func(i):
 				engine.set_next_bowler(club, null if i == 0 else bowlers[i - 1])
+				_decision("next_bowler", {"player": "captain" if i == 0 else bowlers[i - 1].name})
 				_refresh(false)))
 
 		var fields := [Fields.AUTO] + Fields.PRESETS.keys()
@@ -548,6 +601,7 @@ func _refresh_instructions() -> void:
 		_instructions.add_child(_labelled_picker("FIELD", fields, fields.find(current),
 			func(i):
 				engine.set_field(club, fields[i])
+				_decision("field", {"field": fields[i]})
 				_refresh(false)))
 		var spots := engine.current_field(inn)
 		var phase := inn.phase(engine.format)
@@ -583,6 +637,7 @@ func _approach_button(text: String, active: bool, apply: Callable) -> Button:
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.pressed.connect(func():
 		apply.call()
+		_decision("approach", {"setting": text})
 		_refresh(false))
 	return b
 

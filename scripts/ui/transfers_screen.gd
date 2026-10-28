@@ -227,6 +227,8 @@ func _show_deal(box: VBoxContainer) -> void:
 func _bid(fee: int) -> void:
 	var s: Season = app.season
 	var response := Transfers.respond(_target, fee, s)
+	GameLog.event("bid", {"player": _target.name, "fee": fee, "value": Transfers.value(_target, s),
+		"answer": response.result, "asking": response.asking})
 	_deal = {"fee": fee, "response": response,
 		"wage": Transfers.wage_demand(_target, s, true), "years": Transfers.demand_years(_target)}
 	on_shown()
@@ -262,6 +264,7 @@ func _show_bids() -> void:
 				on_shown()))
 			h.add_child(UIKit.small_button("Reject", func():
 				o.status = "rejected"
+				GameLog.event("bid_rejected", {"player": p.name, "from": o.from.name, "fee": o.fee})
 				s.save()
 				on_shown()))
 			box.add_child(h.get_parent())

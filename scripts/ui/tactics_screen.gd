@@ -116,6 +116,7 @@ func _build_selection() -> void:
 		_player_cells(h, p, s)
 		h.add_child(_action_button("Drop", false, func():
 			team.players.erase(p)
+			GameLog.event("selection", {"action": "drop", "player": p.name})
 			on_shown()))
 		_xi.add_child(h.get_parent())
 
@@ -130,6 +131,7 @@ func _build_selection() -> void:
 		_player_cells(h, p, s)
 		var pick := _action_button("Pick", full or s.is_injured(p), func():
 			team.players.append(p)
+			GameLog.event("selection", {"action": "pick", "player": p.name})
 			on_shown())
 		if full:
 			pick.tooltip_text = "Drop someone from the XI first"
@@ -151,6 +153,7 @@ func _build_selection() -> void:
 	auto.tooltip_text = "Let the assistant pick the strongest fit XI now"
 	auto.pressed.connect(func():
 		Selection.auto_select(team, s)
+		GameLog.event("selection", {"action": "auto_select", "xi": team.players.map(func(x): return x.name)})
 		on_shown())
 	actions.add_child(auto)
 	var assistant := CheckBox.new()

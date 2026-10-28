@@ -12,6 +12,43 @@ Open `project.godot` in Godot 4.6.1 and press F5, or:
 "%USERPROFILE%\Downloads\Godot_v4.6.1-stable_win64\Godot_v4.6.1-stable_win64.exe" --path .
 ```
 
+### The Windows build
+
+`build/CricketManager.exe` is a standalone build (about 100 MB, everything inside it): double-
+click it. Windows may show a SmartScreen warning because the exe isn't code-signed; choose
+"More info" then "Run anyway". Rebuild it after changing the game or the data:
+
+```
+"%USERPROFILE%\Downloads\Godot_v4.6.1-stable_win64\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --export-release "Windows Desktop" build/CricketManager.exe
+```
+
+This needs Godot's 4.6.1 Windows export templates in `%APPDATA%\Godot\export_templates\4.6.1.stable\`
+(from the export templates package on Godot's download page). `build/` isn't in git. The build
+and the editor share the same save and logs, in `%APPDATA%\Godot\app_userdata\Cricket Manager\`.
+
+### Play log and notes
+
+Every session writes a play log to `%APPDATA%\Godot\app_userdata\Cricket Manager\logs\`
+(`session-<date>-<time>.jsonl`, the newest 30 kept). Nothing is sent anywhere; it's there to
+read back when reviewing a play-test. Each line is one JSON event:
+
+- `session_start` / `session_end`: version, build, OS, club, date.
+- `screen`, `advance`, `new_season`, `new_career`: moving around and through the calendar.
+- `match_start` / `match_end`: teams, toss, your XI, the result and scores, player of the
+  match, super overs, and a count of your in-match decisions.
+- `decision`: each in-match choice (batting/bowling approach, field, moved fielder, next
+  bowler, next batter, DRS review taken or not, and whether the call was really wrong), with
+  the over and score.
+- `result` (every fixture in the league), `injury`, `selection`, `bid`, `bid_received`,
+  `bid_rejected`, `transfer`, `renewal`, `season_review`.
+- `error`, `warning`, `script_error`: any engine or script error, with file, line and
+  backtrace.
+- `note`: press **F8** (or **Note** in the top bar) to write a note; it's saved with the screen,
+  date, league position and, on Match Day, the score and last ball.
+
+Godot's own console log is kept alongside as `godot.log`. Pass `--no-log` after `--` to run
+without a play log.
+
 **Continue** (top right) drives the game like FM's: on a day your club plays it takes you
 to Match Day, where it plays and pauses the match (Next Ball / Next Over / Sim to End step
 through it). Once the match is over, Continue plays the day's other fixtures and moves to
@@ -261,6 +298,7 @@ scripts/engine/              Simulation, no UI code
   match_ratings.gd           Player ratings and player of the match
   commentary.gd              Ball-by-ball text
   season.gd                  Calendar, results, table, play-offs, form, news, saving
+scripts/game_log.gd          Local play log (JSON lines) and error capture
 scripts/ui/                  FM24-style interface
   ui_kit.gd                  Palette, theme, cards, tables, meters, attribute colours
   app.gd                     Shell: top bar, sidebar navigation, Continue

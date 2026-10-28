@@ -153,6 +153,8 @@ static func complete(p: CricketPlayer, buyer: CricketTeam, fee: int, wage: int, 
 		var text := "%s moves from %s to %s for %s on %s a year until %d" % [
 			p.name, from, buyer.name, money(fee), money(wage), s.year + years]
 		s.add_news("%s %s" % [p.name, "signs" if buyer == s.club else "sold"], text + ".")
+		GameLog.event("transfer", {"player": p.name, "from": from, "to": buyer.name, "fee": fee, "wage": wage,
+			"years": years, "value": value(p, s), "age": p.age, "date": s.date_text()})
 		if fee > 0:
 			s.log_money(-fee if buyer == s.club else fee, "%s %s" % ["Signed" if buyer == s.club else "Sold", p.name])
 
@@ -166,6 +168,7 @@ static func renew(p: CricketPlayer, s: Season) -> String:
 		return "Renewing on %s would put you %s over the wage budget" % [money(wage), money(over)]
 	s.contracts[p] = {"wage": wage, "until": s.year + years}
 	s.add_news("%s signs a new contract" % p.name, "%s a year until %d." % [money(wage), s.year + years])
+	GameLog.event("renewal", {"player": p.name, "wage": wage, "until": s.year + years})
 	return ""
 
 
@@ -189,6 +192,7 @@ static func make_ai_offers(s: Season, days: int) -> void:
 		s.offers.append({"player": p, "from": buyer, "fee": fee, "day": s.day, "status": "pending"})
 		s.add_news("Bid for %s" % p.name, "%s offer %s. Respond on the Transfers screen within %d days." % [
 			buyer.name, money(fee), OFFER_DAYS])
+		GameLog.event("bid_received", {"player": p.name, "from": buyer.name, "fee": fee, "value": v, "listed": listed})
 
 
 static func expire_offers(s: Season) -> void:

@@ -13,6 +13,8 @@ var _app: Node
 
 func _initialize() -> void:
 	Season.save_path = SAVE
+	GameLog.dir = LOG_DIR
+	_clear_logs()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
 	_app = load("res://scenes/app.tscn").instantiate()
 	root.add_child(_app)
@@ -39,7 +41,9 @@ func _process(_delta: float) -> bool:
 	club.players.append(reserve)
 	tactics.on_shown()
 	assert(club.players.size() == 11 and reserve in club.players, "reserve picked")
-	Selection.auto_select(club, season)
+	var auto: Array = tactics._check.find_children("*", "Button", true, false).filter(func(b): return b.text == "Auto Select")
+	auto[0].pressed.emit()
+	assert(club.players.size() == 11, "Auto Select picked an XI")
 	tactics._show_view("Roles & Plan")
 	tactics._show_view("Selection")
 	print("selection ok: %d in XI, %d reserves" % [club.players.size(), club.reserves().size()])
@@ -164,11 +168,38 @@ func _process(_delta: float) -> bool:
 	var reloaded := Season.load_from(SAVE)
 	assert(reloaded and reloaded.day == season.day, "autosave matches the live season")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
+	_check_log()
 	print("UI SMOKE PASSED (%d review prompts answered)" % _reviews_answered)
 	return true
 
 
 var _reviews_answered := 0
+const LOG_DIR := "user://smoke_logs"
+
+
+## The play log should hold the session and everything the run did, plus a written note.
+func _check_log() -> void:
+	_app._note_text.text = "smoke test note"
+	_app._save_note()
+	var counts := {}
+	for line in FileAccess.get_file_as_string(GameLog.path).split("\n", false):
+		var e = JSON.parse_string(line)
+		assert(typeof(e) == TYPE_DICTIONARY and e.has("type") and e.has("t"), "log line is JSON with a type")
+		counts[e.type] = counts.get(e.type, 0) + 1
+	for kind in ["session_start", "screen", "advance", "match_start", "match_end", "decision", "result", "transfer", "selection", "note"]:
+		assert(counts.get(kind, 0) > 0, "log has %s events" % kind)
+	print("log ok: %s" % JSON.stringify(counts))
+	GameLog.stop()
+	_clear_logs()
+
+
+func _clear_logs() -> void:
+	if not DirAccess.dir_exists_absolute(LOG_DIR):
+		return
+	var real := ProjectSettings.globalize_path(LOG_DIR)
+	for f in DirAccess.get_files_at(LOG_DIR):
+		DirAccess.remove_absolute(real.path_join(f))
+	DirAccess.remove_absolute(real)
 
 
 ## Plays the match on screen to the end, answering review prompts (review every other one).

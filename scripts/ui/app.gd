@@ -37,6 +37,8 @@ var _subtitle: Label
 var _date: Label
 var _continue: Button
 var _content: MarginContainer
+var _note_dialog: ConfirmationDialog
+var _note_text: TextEdit
 
 
 func _ready() -> void:
@@ -46,8 +48,12 @@ func _ready() -> void:
 	season = Season.load_or_new()
 	teams = season.teams
 	club = season.club
+	if not "--no-log" in OS.get_cmdline_user_args():
+		GameLog.start({"save": Season.save_path, "club": club.name, "year": season.year, "date": season.date_text(),
+			"args": Array(OS.get_cmdline_user_args())})
 	theme = UIKit.make_theme(club.colour)
 	_build()
+	_build_note_dialog()
 	var start := "home"
 	var args := OS.get_cmdline_user_args()
 	for id in ["squad", "tactics", "fixtures", "competition", "match", "transfers", "finances"]:
@@ -73,6 +79,7 @@ func show_screen(id: String) -> void:
 	if _current.has_method("on_shown"):
 		_current.call("on_shown")
 	refresh_header()
+	GameLog.event("screen", {"screen": id, "date": season.date_text()})
 
 
 func refresh_header() -> void:
@@ -106,14 +113,18 @@ func advance() -> void:
 		return
 	if season.is_over():
 		season.start_next_season()
+		GameLog.event("new_season", {"year": season.year, "club": club.name})
 		show_screen("home")
 		return
+	var from := season.date_text()
 	season.advance()
+	GameLog.event("advance", {"from": from, "to": season.date_text(), "position": season.position(club)})
 	show_screen("match" if season.user_match_pending() else "home")
 
 
 ## Starts a new career with the given club, replacing the saved one.
 func new_career(club_index: int) -> void:
+	GameLog.event("new_career", {"club": teams[club_index].name})
 	Season.new_career(club_index).save()
 	get_tree().reload_current_scene()
 
@@ -182,8 +193,61 @@ func _build_top_bar() -> Control:
 	_continue.add_theme_stylebox_override("normal", _continue_style(club.colour.lightened(0.1)))
 	_continue.add_theme_stylebox_override("hover", _continue_style(club.colour.lightened(0.25)))
 	_continue.pressed.connect(_on_continue)
+	var note := Button.new()
+	note.text = "Note (F8)"
+	note.tooltip_text = "Write a play-test note into the session log"
+	note.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	note.pressed.connect(open_note)
+	h.add_child(note)
 	h.add_child(_continue)
 	return bar
+
+
+## Play-test notes: F8 (or the top-bar button) opens a box; the note goes into the session log
+## with where you were (screen, date, match score) so it can be matched up later.
+func _build_note_dialog() -> void:
+	_note_dialog = ConfirmationDialog.new()
+	_note_dialog.title = "Play-test note"
+	_note_dialog.ok_button_text = "Save Note"
+	_note_dialog.min_size = Vector2i(520, 260)
+	var v := VBoxContainer.new()
+	v.add_child(UIKit.label("What happened, or what felt off? Saved to the session log with the current game state.", 13, UIKit.TEXT_DIM))
+	_note_text = TextEdit.new()
+	_note_text.custom_minimum_size = Vector2(480, 150)
+	_note_text.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	v.add_child(_note_text)
+	_note_dialog.add_child(v)
+	_note_dialog.confirmed.connect(_save_note)
+	add_child(_note_dialog)
+
+
+func open_note() -> void:
+	_note_text.text = ""
+	_note_dialog.popup_centered()
+	_note_text.grab_focus()
+
+
+func _save_note() -> void:
+	var text := _note_text.text.strip_edges()
+	if text == "":
+		return
+	var context := {"text": text, "screen": _title.text, "subtitle": _subtitle.text, "date": season.date_text(),
+		"year": season.year, "position": season.position(club)}
+	if _current and _current.has_method("log_context"):
+		context.merge(_current.call("log_context"))
+	GameLog.event("note", context)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F8:
+		open_note()
+		get_viewport().set_input_as_handled()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
+		if GameLog.is_running() and season:
+			GameLog.stop({"date": season.date_text(), "year": season.year, "position": season.position(club)})
 
 
 func _continue_style(colour: Color) -> StyleBoxFlat:

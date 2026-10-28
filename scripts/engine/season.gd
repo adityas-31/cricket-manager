@@ -246,6 +246,8 @@ func record(f: Dictionary, e: MatchEngine) -> void:
 	_gate_receipts(f)
 	if involves(f, club):
 		_report(f)
+	GameLog.event("result", {"date": date_text(f.day), "stage": stage_text(f), "home": f.home.name, "away": f.away.name,
+		"result": text, "score": score_line(f), "ours": involves(f, club), "super_overs": e.super_overs})
 	_update_playoffs()
 
 
@@ -328,6 +330,7 @@ func _roll_injury(p: CricketPlayer) -> void:
 	if p in club.squad:
 		add_news("%s injured" % p.name, "Out for about %d days with a %s." % [
 			days, INJURY_TYPES[rng.randi_range(0, INJURY_TYPES.size() - 1)]])
+		GameLog.event("injury", {"player": p.name, "days": days, "condition": roundi(condition[p])})
 
 
 func _report(f: Dictionary) -> void:
@@ -538,6 +541,7 @@ func start_next_season() -> bool:
 	_award_prizes(standings)
 	var summary := _season_summary(standings)
 	history.append(summary)
+	GameLog.event("season_review", summary)
 	add_news("Season %d review" % year, "%s are champions. %s finished %s. Player of the season: %s. Most runs: %s. Most wickets: %s. Young player: %s." % [
 		summary.champion, club.name, ordinal(summary.club_finish), summary.player_of_season,
 		summary.top_runs, summary.top_wickets, summary.young_player])
