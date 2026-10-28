@@ -7,7 +7,9 @@ extends ScrollContainer
 ## short), and drag an XI player onto the reserves to drop them. Pick/Drop buttons do the same.
 ## Changes apply at once, even mid-match: reordering changes who comes in next.
 ##
-## On a match day the club comes here first (Continue then reads "Start Match").
+## On a match day the club comes here first (Continue then reads "Start Match"). During a
+## match the XI is locked (the match holds a state for each player) but the batting order,
+## roles and bowling plan still apply at once; Continue reads "Back to Match".
 
 var app: Node
 
@@ -25,9 +27,22 @@ func title() -> String:
 
 
 func subtitle() -> String:
+	if app.match_in_progress():
+		return "%s  ·  Match in progress: the XI is locked; order, roles and plan apply now" % app.club.name
 	if app.season.user_match_pending():
 		return "%s  ·  Pick the XI and plan for today's match, then press Start Match" % app.club.name
 	return "%s  ·  Selection, batting order, roles and bowling plan" % app.club.name
+
+
+func continue_label() -> String:
+	return "Back to Match" if app.match_in_progress() else app.default_continue_label()
+
+
+func on_continue() -> void:
+	if app.match_in_progress():
+		app.show_screen("match")
+	else:
+		app.advance()
 
 
 func on_shown() -> void:
@@ -70,7 +85,7 @@ func _ready() -> void:
 	_defaults = UIKit.content(defaults_card)
 
 	var right := VBoxContainer.new()
-	right.custom_minimum_size.x = 560
+	right.custom_minimum_size.x = 680
 	right.add_theme_constant_override("separation", 12)
 	h.add_child(right)
 	var reserves_card := UIKit.card("Reserves")
@@ -86,6 +101,11 @@ func _ready() -> void:
 
 func _build_next_match() -> void:
 	var s: Season = app.season
+	if app.match_in_progress():
+		_next_match.visible = true
+		_next_match.text = "Match in progress. The XI can't change until it's over; drag rows to change who bats next, and set roles and the bowling plan."
+		_next_match.add_theme_color_override("font_color", UIKit.WARNING)
+		return
 	var f: Dictionary = s.user_fixture_today() if s.user_match_pending() else s.next_user_fixture()
 	_next_match.visible = not f.is_empty()
 	if f.is_empty():
@@ -101,6 +121,7 @@ func _build_next_match() -> void:
 func _build_xi() -> void:
 	var team: CricketTeam = app.club
 	var s: Season = app.season
+	var locked: bool = app.match_in_progress()
 	UIKit.clear(_xi)
 	_xi.add_child(_header([["#", 22], ["", 16], ["Player", 0], ["Bat", 36], ["Bowl", 38], ["Cond", 46], ["Form", 40],
 		["Status", 84], ["Role", 140], ["", 56]]))
@@ -111,9 +132,12 @@ func _build_xi() -> void:
 		h.add_child(_cell("≡", 16, UIKit.TEXT_DIM, true))
 		_player_cells(h, p, s)
 		h.add_child(_role_picker(Tactics.BAT_ROLES, Tactics.bat_role(team, p), func(role): team.bat_roles[p] = role))
-		h.add_child(_action_button("Drop", false, _drop.bind(p)))
+		var drop := _action_button("Drop", locked, _drop.bind(p))
+		if locked:
+			drop.tooltip_text = "The XI is locked during a match"
+		h.add_child(drop)
 		var row: Control = h.get_parent()
-		row.tooltip_text = "Drag to change the batting order, or onto Reserves to drop"
+		row.tooltip_text = "Drag to change the batting order" + ("" if locked else ", or onto Reserves to drop")
 		row.set_drag_forwarding(_drag_data.bind(row, p, "xi"), _can_drop_on_xi.bind(i), _drop_on_xi.bind(i))
 		_xi.add_child(row)
 	if team.players.size() < CricketTeam.XI_SIZE:
@@ -127,7 +151,10 @@ func _build_xi() -> void:
 		Tactics.suggest_batting(team)
 		_build_xi())
 	actions.add_child(suggest)
-	actions.add_child(_hint("Drag rows to reorder. Hover a role for what it does."))
+	var tip := _hint("Drag rows to reorder. Hover a role for what it does.")
+	tip.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # a wrapping label in a row needs room, or it wraps every letter
+	tip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	actions.add_child(tip)
 	_xi.add_child(actions)
 
 
@@ -140,18 +167,21 @@ func _build_reserves() -> void:
 	var bench := team.reserves()
 	bench.sort_custom(func(a, b): return maxf(a.batting_rating(), a.bowling_rating()) > maxf(b.batting_rating(), b.bowling_rating()))
 	var full := team.players.size() >= CricketTeam.XI_SIZE
+	var locked: bool = app.match_in_progress()
 	for i in bench.size():
 		var p: CricketPlayer = bench[i]
 		var h := _row(i)
-		h.add_child(_cell("≡", 16, UIKit.TEXT_DIM, true))
+		h.add_child(_cell("" if locked else "≡", 16, UIKit.TEXT_DIM, true))
 		_player_cells(h, p, s)
-		var pick := _action_button("Pick", full or s.is_injured(p), _pick.bind(p, -1))
-		if full:
+		var pick := _action_button("Pick", locked or full or s.is_injured(p), _pick.bind(p, -1))
+		if locked:
+			pick.tooltip_text = "The XI is locked during a match"
+		elif full:
 			pick.tooltip_text = "XI full: drag onto an XI player to swap"
 		h.add_child(pick)
 		var row: Control = h.get_parent()
-		row.tooltip_text = "Injured" if s.is_injured(p) else "Drag onto an XI player to swap them"
-		if not s.is_injured(p):
+		row.tooltip_text = "Injured" if s.is_injured(p) else ("The XI is locked during a match" if locked else "Drag onto an XI player to swap them")
+		if not s.is_injured(p) and not locked:
 			row.set_drag_forwarding(_drag_data.bind(row, p, "reserve"), _can_drop_on_reserves, _drop_on_reserves)
 		_reserves.add_child(row)
 
@@ -170,7 +200,8 @@ func _build_check() -> void:
 	actions.add_theme_constant_override("separation", 12)
 	var auto := Button.new()
 	auto.text = "Auto Select"
-	auto.tooltip_text = "Let the assistant pick the strongest fit XI now"
+	auto.disabled = app.match_in_progress()
+	auto.tooltip_text = "The XI is locked during a match" if auto.disabled else "Let the assistant pick the strongest fit XI now"
 	auto.pressed.connect(func():
 		Selection.auto_select(team, s)
 		GameLog.event("selection", {"action": "auto_select", "xi": team.players.map(func(x): return x.name)})
@@ -210,6 +241,8 @@ func _player_cells(h: HBoxContainer, p: CricketPlayer, s: Season) -> void:
 # --- selection changes (buttons and drag and drop) -----------------------------------
 
 func _drop(p: CricketPlayer) -> void:
+	if app.match_in_progress():
+		return
 	app.club.players.erase(p)
 	GameLog.event("selection", {"action": "drop", "player": p.name})
 	on_shown()
@@ -218,7 +251,7 @@ func _drop(p: CricketPlayer) -> void:
 ## Adds a reserve to the XI at a batting position (-1: the bottom).
 func _pick(p: CricketPlayer, at: int) -> void:
 	var players: Array = app.club.players
-	if players.size() >= CricketTeam.XI_SIZE:
+	if players.size() >= CricketTeam.XI_SIZE or app.match_in_progress():
 		return
 	players.insert(players.size() if at < 0 else mini(at, players.size()), p)
 	GameLog.event("selection", {"action": "pick", "player": p.name})
@@ -227,6 +260,8 @@ func _pick(p: CricketPlayer, at: int) -> void:
 
 ## A reserve takes an XI player's place in the batting order.
 func _swap(reserve: CricketPlayer, out: CricketPlayer) -> void:
+	if app.match_in_progress():
+		return
 	var players: Array = app.club.players
 	players[players.find(out)] = reserve
 	GameLog.event("selection", {"action": "swap", "player": reserve.name, "for": out.name})
@@ -262,7 +297,7 @@ func _can_drop_on_xi(_at: Vector2, data: Variant, index: int) -> bool:
 		return false
 	if data.from == "xi":
 		return true
-	return index >= 0 or app.club.players.size() < CricketTeam.XI_SIZE
+	return not app.match_in_progress() and (index >= 0 or app.club.players.size() < CricketTeam.XI_SIZE)
 
 
 func _drop_on_xi(_at: Vector2, data: Variant, index: int) -> void:
@@ -276,7 +311,7 @@ func _drop_on_xi(_at: Vector2, data: Variant, index: int) -> void:
 
 
 func _can_drop_on_reserves(_at: Vector2, data: Variant) -> bool:
-	return typeof(data) == TYPE_DICTIONARY and data.get("from", "") == "xi"
+	return typeof(data) == TYPE_DICTIONARY and data.get("from", "") == "xi" and not app.match_in_progress()
 
 
 func _drop_on_reserves(_at: Vector2, data: Variant) -> void:

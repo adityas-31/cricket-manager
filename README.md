@@ -53,7 +53,8 @@ without a play log.
 to Tactics first: pick the XI and plan, then **Start Match** opens Match Day, where Continue
 plays and pauses the match (Next Ball / Next Over / Sim to End step through it; the Speed
 slider runs faster to the right). Play stops at the innings break until you press **Start 2nd
-Innings**. When the match ends the Report tab opens (result, key performances, ratings, league
+Innings**; **Edit Tactics** there opens Tactics for the batting order, roles and bowling plan
+(the XI is locked once a match starts), and Continue there reads **Back to Match**. When the match ends the Report tab opens (result, key performances, ratings, league
 position, next match, the squad's condition and injuries); **Done** plays the day's other
 fixtures, runs training up to the next match day and goes back to Home. Start a career with
 another club from Home.
@@ -238,15 +239,18 @@ their academies.
   who plays every game drops below 75% (tired) after about five.
 - **Injuries**: about 1.2% per player per match, rising to 6% for a spent player; out for
   3-28 days. Your club's injuries and returns are in the news.
-- **Training** (`training.gd`, Training screen): on the days between matches your squad
-  trains with a team focus (Balanced, Batting, Bowling, Fielding, Fitness, Recovery) at an
-  intensity (Light, Normal, Hard), and any player can have their own focus. It replaces the
-  plain 5%-a-day recovery for your club: Light recovers 40% faster, Hard 40% slower, Recovery
-  focus 30% faster with no development. Focused attributes grow by 0.06 points a day at
-  Normal (x0.5 Light, x1.7 Hard), shared across them, in full up to age 22 and tailing off to
-  a tenth by 31; skills a player doesn't use (below 5) aren't trained. Hard sessions risk
-  injuries (0.5% a player a day, more when tired), Normal 0.15%, Light none. A training report
-  goes to the Inbox after each block. Other clubs just rest.
+- **Training** (`training.gd`, Training screen): a calendar of the days between your
+  matches, two sessions a day (morning and afternoon). Sessions: Batting nets, Bowling,
+  Fielding drills, Fitness, Mental, Match prep, Recovery, Rest. Pick a template (Balanced,
+  Batting, Bowling, Fitness, Skills, Light) and change any day by hand; by default the morning
+  after a match is Recovery and the afternoon before one is Match prep. Everyone recovers 5%
+  a day like other clubs; each session then takes its load (Fitness 3.5, Bowling 2.5, Batting
+  nets 2, Fielding 1.5, Match prep 0.5) or gives some back (Recovery +4, Rest +2.5). A skill
+  session adds 0.07 attribute points, shared across its attributes (or a player's own focus
+  instead), in full up to age 22 and tailing off to a tenth by 31; skills a player doesn't use
+  (below 5) aren't trained. Skill sessions carry a small injury risk (up to 0.15% a session,
+  more when tired). Each Match prep session (two count) adds 3 to the XI's starting
+  confidence. A training report goes to the Inbox after each block. Other clubs just rest.
 - **Between matches**: form (from match ratings) sets a player's starting confidence;
   season stats and ratings accumulate.
 - **Transfers and contracts** (`transfers.gd`, Transfers and Finances screens): every player
@@ -305,7 +309,8 @@ scripts/engine/              Simulation, no UI code
   captain_ai.gd              Batting intent, bowling changes, field approach
   match_dynamics.gd          Condition, confidence and pressure meters
   tactics.gd                 Batting and bowling roles, suggestions
-  training.gd                Training between matches: recovery, development, injuries
+  training.gd                Training calendar: sessions, templates, recovery, development
+  touchline.gd               Touchline messages to the middle and their effects
   innings.gd                 Score and scorecard state, lineup, reviews, super-over limits
   fields.gd                  Field presets, the 30-yard circle, fielding restrictions
   match_engine.gd            Toss, innings flow, result
@@ -321,7 +326,7 @@ scripts/ui/                  FM24-style interface
   squad_screen.gd            Squad list with form/fitness/stats, player profile
   tactics_screen.gd          One page: XI in batting order with roles (drag and drop),
                              reserves, selection check, bowling plan, match instructions
-  training_screen.gd         Team focus and intensity, individual focus, latest report
+  training_screen.gd         Training calendar, templates, individual focus, latest report
   match_screen.gd            Match Day (league fixtures and friendlies), wagon wheel,
                              innings break, post-match report
   field_view.gd              2D ground view
@@ -370,6 +375,12 @@ bowled, lbw, stumped and run out.
   Field picker shows which one the captain is using.
 - **Wagon wheel**: tick it on Match Day to draw the striker's scoring shots this match on the
   ground, with their off/leg split and favourite area, to help set the field.
+- **Messages to the middle** (`touchline.gd`), cricket's version of FM's touchline shouts,
+  from the Instructions card. Batting: Rotate the strike, Take him on (aimed at the bowler on),
+  See off this spell (likewise), Settle down, Lift the tempo. Bowling: Attack the stumps, Dry
+  it up, Short-ball plan, Yorkers, Get in his ear. Either: Encourage. Each lasts 12 legal
+  balls, then the side waits 12 before the next; a repeat in the same innings has 60% of the
+  last one's effect. Each trades runs against wickets (see engine_test's effect table).
 - **Bowling changes**: pick who bowls the next over (or leave it to the captain).
 - **Batting order on the fly**: "Next in" sends any waiting batter in at the next wicket.
 - **DRS**: umpires get about 1 in 10 given-out lbws/catches behind wrong, and some shouts
@@ -400,6 +411,9 @@ also changes the field).
 Everything is on one page. Drag XI rows to change the batting order, drag a reserve onto an XI
 player to swap them (or into the XI's empty space when it's short), and drag an XI player
 onto Reserves to drop them; Pick and Drop buttons do the same.
+
+Once a match starts the XI is locked (Pick, Drop, swaps and Auto Select are off) until it's
+over; the batting order, roles and bowling plan still apply at once.
 
 - **Batting order**: the team's `players` order. Changing it mid-match changes who comes in next.
 - **Batting roles** add intent per phase: Balanced, Anchor, Aggressor, Pinch Hitter, Finisher.

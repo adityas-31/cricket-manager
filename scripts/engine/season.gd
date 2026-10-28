@@ -61,9 +61,11 @@ var ledger: Array = []  # the club's money in and out: {day, text, amount}
 var offers: Array = []  # AI bids for the club's players: {player, from, fee, day, status}
 var listed := {}  # the club's transfer-listed players -> true
 var champion: CricketTeam = null
-var training := Training.default_plan()  # the club's team training: {focus, intensity}
+var training_template := "Balanced"  # the club's default week, a Training.TEMPLATES name
+var training_plan := {}  # day -> [morning, afternoon] sessions set by hand (see Training)
 var training_focus := {}  # CricketPlayer -> their own focus (Training.INDIVIDUAL), if not the team's
 var last_training := {}  # the latest Training.run report, for the Training screen
+var match_prep := 0  # Match prep sessions since the club's last match (Training.MAX_PREP at most)
 ## Lines describing selection changes made at the last start_match() for the club.
 var last_selection_changes: Array = []
 var rng := RandomNumberGenerator.new()
@@ -198,14 +200,17 @@ func advance() -> bool:
 			injuries.erase(p)
 			if p in club.squad:
 				add_news("%s is fit again" % p.name, "Back in full training and available for selection.")
-	last_training = Training.run(self, day - was)
+	last_training = Training.run(self, was, day)
+	for d: int in training_plan.keys():
+		if d <= day:
+			training_plan.erase(d)
 	var report := Training.summary(last_training, self)
 	if report != "":
 		add_news("Training report", report)
 		var gains: Dictionary = last_training.gains
-		GameLog.event("training", {"days": last_training.days, "focus": training.focus, "intensity": training.intensity,
+		GameLog.event("training", {"days": last_training.days.map(func(x): return x.sessions), "template": training_template,
 			"individual": training_focus.size(), "injured": last_training.injured.map(func(x): return x.name),
-			"gain": snappedf(gains.values().reduce(func(a, b): return a + b, 0.0), 0.01)})
+			"prep": last_training.prep, "gain": snappedf(gains.values().reduce(func(a, b): return a + b, 0.0), 0.01)})
 	save()
 	return true
 
@@ -228,6 +233,10 @@ func start_match(f: Dictionary) -> MatchEngine:
 		for p in t.players:
 			e.states[p].condition = condition[p]
 			e.states[p].confidence = 50.0 + (form[p] - 50.0) * 0.5
+			if t == club:
+				e.states[p].confidence += match_prep * Training.PREP_CONFIDENCE
+	if involves(f, club):
+		match_prep = 0
 	return e
 
 
@@ -770,6 +779,8 @@ func _reset_for(new_year: int) -> void:
 	listed = {}
 	ledger = []
 	injuries = {}
+	training_plan = {}
+	match_prep = 0
 	var everyone := all_players()
 	var new_form := {}
 	condition = {}
@@ -838,7 +849,11 @@ func save() -> void:
 	data.offers = offers.map(func(o): return {"player": o.player.id, "from": teams.find(o.from), "fee": o.fee,
 		"day": o.day, "status": o.status})
 	data.listed = listed.keys().map(func(p): return p.id)
-	data.training = training
+	data.training_template = training_template
+	data.training_plan = {}
+	for d: int in training_plan:
+		data.training_plan[str(d)] = training_plan[d]
+	data.match_prep = match_prep
 	data.training_focus = {}
 	for p: CricketPlayer in training_focus:
 		data.training_focus[str(p.id)] = training_focus[p]
@@ -906,9 +921,14 @@ static func load_from(path: String) -> Season:
 			"day": int(od.day), "status": od.status})
 	for id in data.listed:
 		s.listed[by_id[int(id)]] = true
-	var plan: Dictionary = data.get("training", {})
-	if Training.FOCUSES.has(plan.get("focus")) and Training.INTENSITIES.has(plan.get("intensity")):
-		s.training = {"focus": plan.focus, "intensity": plan.intensity}
+	if Training.TEMPLATES.has(data.get("training_template")):
+		s.training_template = data.training_template
+	var plan: Dictionary = data.get("training_plan", {})
+	for key in plan:
+		var sessions: Array = plan[key]
+		if sessions.size() == 2 and sessions.all(func(x): return Training.SESSIONS.has(x)):
+			s.training_plan[int(key)] = sessions
+	s.match_prep = int(data.get("match_prep", 0))
 	var focus: Dictionary = data.get("training_focus", {})
 	for key in focus:
 		if by_id.has(int(key)) and focus[key] in Training.INDIVIDUAL:

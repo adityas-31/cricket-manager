@@ -32,8 +32,9 @@ const MIXED_PAIR_PENALTY := 0.3
 ## ctx: batter, batter_balls, bowler, intent, phase, pitch, progress (0-1 through the
 ## innings), fielding (CricketTeam), free_hit, and the MatchDynamics meters: batter_state,
 ## bowler_state ({condition, confidence}), pressure (0-100), bowling_approach (0-2).
-## Optional: field (spots, see Fields; without one the field has no effect) and mixed_pair
-## (a left-right batting partnership, which disrupts the bowler's line).
+## Optional: field (spots, see Fields; without one the field has no effect), mixed_pair
+## (a left-right batting partnership, which disrupts the bowler's line), and bat_message /
+## bowl_message (running touchline messages, see Touchline.scaled).
 ## Returns {extra ("", "wd", "nb"), extra_runs, runs, legal, boundary, wicket ({} or
 ## {kind, fielder?, non_striker?}), dropped (fielder or null), missed_stumping, angle, distance,
 ## region, fielded ("" or how the field changed the ball: "cut off", "rope catch", "gap",
@@ -59,16 +60,18 @@ static func bowl(rng: RandomNumberGenerator, ctx: Dictionary) -> Dictionary:
 		"angle": 0.0, "distance": 0.0, "region": "", "fielded": "", "appeal": {},
 	}
 	var spots: Array = ctx.get("field", [])
+	var bat_msg: Dictionary = ctx.get("bat_message", {})
+	var bowl_msg: Dictionary = ctx.get("bowl_message", {})
 
 	# Tired bowlers lose their radar.
-	var wide_chance := clampf(0.045 + (10.0 - accuracy) * 0.003, 0.01, 0.09) * (1.0 + bowl_tired)
+	var wide_chance: float = clampf(0.045 + (10.0 - accuracy) * 0.003, 0.01, 0.09) * (1.0 + bowl_tired) * bowl_msg.get("wide", 1.0)
 	if rng.randf() < wide_chance:
 		result.extra = "wd"
 		result.extra_runs = 1
 		result.legal = false
 		return result
 	var pace_bonus := 0.004 if bowler.style == CricketPlayer.Style.PACE else 0.0
-	if rng.randf() < clampf(0.005 + (10.0 - accuracy) * 0.001 + pace_bonus, 0.001, 0.03) * (1.0 + bowl_tired):
+	if rng.randf() < clampf(0.005 + (10.0 - accuracy) * 0.001 + pace_bonus, 0.001, 0.03) * (1.0 + bowl_tired) * bowl_msg.get("noball", 1.0):
 		result.extra = "nb"
 		result.extra_runs = 1
 		result.legal = false
@@ -106,6 +109,10 @@ static func bowl(rng: RandomNumberGenerator, ctx: Dictionary) -> Dictionary:
 		2:  # attacking: full and at the stumps
 			w["W"] *= 1.1
 			w["1"] *= 0.97
+	for msg in [bat_msg, bowl_msg]:
+		var mult: Dictionary = msg.get("w", {})
+		for k in mult:
+			w[k] *= mult[k]
 	if ctx.phase == "death":
 		w["6"] *= 1.15
 	if ctx.phase == "powerplay":  # new ball, hard and fast off the bat

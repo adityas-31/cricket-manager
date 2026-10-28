@@ -5,7 +5,7 @@ extends RefCounted
 ## first) until the tie is broken. The match screen and the tests drive it with bowl_ball().
 ##
 ## The manager's side (manager_team) can pick the next bowler, set the field, change who bats
-## next, and is asked before using a DRS review: bowl_ball() then returns an event with
+## next, send messages to the middle (Touchline), and is asked before using a DRS review: bowl_ball() then returns an event with
 ## review_pending, and resolve_review() finishes the delivery. Every other decision, and every
 ## decision in a match without a manager, is the captain's (CaptainAI).
 
@@ -44,6 +44,11 @@ var field_choice := {}  # CricketTeam -> a Fields.PRESETS name, Fields.CUSTOM or
 var custom_field := {}  # CricketTeam -> spots set by hand
 ## A delivery waiting on the manager's review decision: {result, meta, team}.
 var pending_review := {}
+## Touchline messages this innings: the one each side has running {name, balls_left, factor,
+## bowler}, balls until each side can send another, and how often each was sent.
+var messages := {}
+var message_wait := {}
+var message_uses := {}
 
 
 func _init(home: CricketTeam, away: CricketTeam, fmt: MatchFormat, pitch_type := "balanced", seed := -1) -> void:
@@ -87,6 +92,7 @@ func batting_intent(inn: Innings, entry: Dictionary) -> float:
 	var i := CaptainAI.intent(inn, format, entry)
 	i += BAT_OFFSETS[bat_approach[inn.batting_team]]
 	i += inn.pressure / 100.0 * 0.3
+	i += message_effect(inn.batting_team, inn).get("intent", 0.0)
 	return clampf(i, -1.0, 1.0)
 
 
@@ -98,16 +104,83 @@ func bowling_approach(inn: Innings) -> int:
 
 # --- the manager's controls --------------------------------------------------------
 
-## Who may bowl the next over: not the keeper, not whoever bowled the last one, and anyone
-## still inside their over limit.
+## Who can bowl the next over: not the keeper, not whoever bowled the last one (or is
+## bowling this one), and nobody who has used up their overs.
 func eligible_bowlers(inn: Innings) -> Array:
+	var bowling_now: CricketPlayer = inn.bowler.player if not inn.bowler.is_empty() else null
 	var out := []
 	for p: CricketPlayer in inn.bowling_team.players:
-		if p.is_keeper() or p == inn.last_over_bowler:
+		if p.is_keeper() or p == inn.last_over_bowler or p == bowling_now:
 			continue
 		if inn.super_over or inn.overs_bowled_by(p) < format.max_bowler_overs:
 			out.append(p)
 	return out
+
+
+## Whether a side can send a touchline message now (none running, not waiting).
+func can_send_message(team: CricketTeam) -> bool:
+	return not finished and not messages.has(team) and message_wait.get(team, 0) <= 0
+
+
+## The messages a side can send in its current role.
+func message_options(team: CricketTeam) -> Array:
+	return Touchline.names_for("bat" if current().batting_team == team else "bowl")
+
+
+## Sends a touchline message for a side. Returns a line for the commentary, or "" if it
+## can't be sent now.
+func send_message(team: CricketTeam, name: String) -> String:
+	if not can_send_message(team) or not name in message_options(team):
+		return ""
+	var inn := current()
+	var uses: Dictionary = message_uses.get_or_add(team, {})
+	var factor := pow(Touchline.REPEAT_FACTOR, uses.get(name, 0))
+	uses[name] = uses.get(name, 0) + 1
+	var m: Dictionary = Touchline.MESSAGES[name]
+	var bowler: CricketPlayer = null
+	if m.get("bowler", false):
+		bowler = inn.bowler.player if not inn.bowler.is_empty() else next_bowler.get(inn.bowling_team)
+	messages[team] = {"name": name, "balls_left": Touchline.MESSAGE_BALLS, "factor": factor, "bowler": bowler}
+	inn.pressure = clampf(inn.pressure + m.get("pressure", 0.0) * factor, 0.0, 100.0)
+	var lifted: Array = [inn.striker.player, inn.non_striker.player] if team == inn.batting_team else team.players
+	for p in lifted:
+		states[p].confidence = clampf(states[p].confidence + m.get("confidence", 0.0) * factor, 0.0, 100.0)
+	var note := ""
+	if m.get("sledge", false):
+		var striker: CricketPlayer = inn.striker.player
+		var fired := striker.a("composure") >= Touchline.SLEDGE_COMPOSURE
+		states[striker].confidence = clampf(states[striker].confidence + (6.0 if fired else -6.0) * factor, 0.0, 100.0)
+		note = " %s %s." % [striker.surname(), "just smiles: that's fired him up" if fired else "looks rattled"]
+	if bowler:
+		note += " (aimed at %s)" % bowler.surname()
+	return "Message from the %s dressing room: %s.%s%s" % [team.short_name, name,
+		"" if factor >= 1.0 else " The players have heard it before.", note]
+
+
+## The scaled effects of a side's running message for the next ball, or {} if none applies
+## (no message, or one aimed at a bowler who isn't on).
+func message_effect(team: CricketTeam, inn: Innings) -> Dictionary:
+	var m: Dictionary = messages.get(team, {})
+	if m.is_empty():
+		return {}
+	if m.bowler != null and (inn.bowler.is_empty() or inn.bowler.player != m.bowler):
+		return {}
+	return Touchline.scaled(m.name, m.factor)
+
+
+## Counts a legal ball off running messages and waits; returns the messages that just ended.
+func _tick_messages() -> Array:
+	var ended := []
+	for t in teams:
+		if messages.has(t):
+			messages[t].balls_left -= 1
+			if messages[t].balls_left <= 0:
+				ended.append({"team": t, "name": messages[t].name})
+				messages.erase(t)
+				message_wait[t] = Touchline.COOLDOWN_BALLS
+		elif message_wait.get(t, 0) > 0:
+			message_wait[t] -= 1
+	return ended
 
 
 func set_next_bowler(team: CricketTeam, p: CricketPlayer) -> void:
@@ -177,6 +250,8 @@ func bowl_ball() -> Dictionary:
 		"bowling_approach": bowling_approach(inn),
 		"field": spots,
 		"mixed_pair": striker.player.left_handed != inn.non_striker.player.left_handed,
+		"bat_message": message_effect(inn.batting_team, inn),
+		"bowl_message": message_effect(inn.bowling_team, inn),
 	})
 	var meta := {
 		"innings": inn.number,
@@ -241,6 +316,7 @@ func _apply(r: Dictionary, meta: Dictionary) -> Dictionary:
 	event.merge(inn.record(r))
 	event.commentary = Commentary.describe(event, rng)
 	MatchDynamics.after_ball(self, inn, event)
+	event.messages_ended = _tick_messages() if r.legal else []
 
 	event.end_of_over = r.legal and inn.legal_balls % 6 == 0
 	if event.end_of_over:
@@ -249,6 +325,9 @@ func _apply(r: Dictionary, meta: Dictionary) -> Dictionary:
 
 	event.innings_complete = inn.is_complete()
 	if event.innings_complete:
+		messages = {}
+		message_wait = {}
+		message_uses = {}
 		_next_innings(inn)
 	event.match_complete = finished
 	event.score = inn.score_text()

@@ -134,6 +134,11 @@ func finish_match_day() -> void:
 	show_screen("home")
 
 
+## True while the club's match on Match Day has started and isn't finished.
+func match_in_progress() -> bool:
+	return _screens.has("match") and _screens["match"].in_progress()
+
+
 func _on_tactics() -> bool:
 	return _current != null and _current == _screens.get("tactics")
 

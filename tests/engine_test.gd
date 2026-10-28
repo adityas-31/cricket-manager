@@ -1,7 +1,8 @@
 extends SceneTree
 ## Engine rules: super overs settle ties, DRS overturns bad calls, the manager's bowler and
-## batting-order choices are used, custom fields obey restrictions, and handedness matchups
-## favour the bowler who moves the ball away.
+## batting-order choices are used, custom fields obey restrictions, handedness matchups
+## favour the bowler who moves the ball away, and touchline messages run, cool down, wear off
+## when repeated and move the numbers the way they say.
 ##
 ## Run: godot --headless --path . --script res://tests/engine_test.gd
 
@@ -15,6 +16,7 @@ func _init() -> void:
 	_test_manager_choices(teams)
 	_test_fields()
 	_test_matchups(teams)
+	_test_messages(teams)
 	print("FAILURES: %d" % _failures if _failures else "ALL CHECKS PASSED")
 	quit(1 if _failures else 0)
 
@@ -65,6 +67,61 @@ func _test_reviews(teams: Array) -> void:
 			_check(inn.reviews.values().all(func(r): return r >= 0), "reviews never go negative")
 	print("Reviews in 60 matches: %d, overturned %d" % [reviews, overturned])
 	_check(reviews > 0 and overturned > 0, "reviews happen and some succeed")
+
+
+func _test_messages(teams: Array) -> void:
+	var e := MatchEngine.new(teams[0], teams[1], MatchFormat.t20(), "balanced", 5)
+	var inn := e.current()
+	var bat: CricketTeam = inn.batting_team
+	var bowl: CricketTeam = inn.bowling_team
+	_check(e.send_message(bat, "Yorkers") == "", "a batting side can't send a bowling message")
+	_check(e.send_message(bat, "Rotate the strike") != "", "message sent")
+	_check(not e.can_send_message(bat) and e.can_send_message(bowl), "one message at a time per side")
+	_check(e.send_message(bowl, "Encourage") != "", "either side can encourage")
+	var legal := 0
+	while e.messages.has(bat) and e.current() == inn:
+		if e.bowl_ball().get("legal", true):
+			legal += 1
+	_check(legal == Touchline.MESSAGE_BALLS, "a message lasts %d legal balls (%d)" % [Touchline.MESSAGE_BALLS, legal])
+	_check(not e.can_send_message(bat), "then the side waits")
+	while e.message_wait.get(bat, 0) > 0 and e.current() == inn:
+		e.bowl_ball()
+	_check(e.can_send_message(bat), "and can send again")
+	e.send_message(bat, "Rotate the strike")
+	_check(is_equal_approx(e.messages[bat].factor, Touchline.REPEAT_FACTOR), "a repeated message is weaker")
+
+	# Effect sizes: a first innings with one side sending the same message whenever it can.
+	var base := _innings_with("", "bowl")
+	print("Messages (120 first innings each; runs, wickets): none %.1f, %.2f" % [base.runs, base.wickets])
+	var results := {}
+	for name in Touchline.MESSAGES:
+		var side: String = "bat" if Touchline.MESSAGES[name].side == "bat" else "bowl"
+		results[name] = _innings_with(name, side)
+		print("  %-18s %.1f, %.2f" % [name, results[name].runs, results[name].wickets])
+	_check(results["Dry it up"].runs < base.runs - 3.0, "Dry it up saves runs")
+	_check(results["Attack the stumps"].wickets > base.wickets, "Attack the stumps takes more wickets")
+	_check(results["Lift the tempo"].runs > base.runs, "Lift the tempo scores faster")
+	_check(results["Rotate the strike"].wickets < base.wickets, "Rotate the strike loses fewer wickets")
+
+
+## Average first-innings runs and wickets when one side ("bat" or "bowl") sends the message
+## whenever it can (or nothing, for "").
+func _innings_with(message: String, side: String) -> Dictionary:
+	var teams := CricketTeam.load_all("res://data/teams.json")
+	var runs := 0.0
+	var wickets := 0.0
+	for seed in 120:
+		var e := MatchEngine.new(teams[0], teams[1], MatchFormat.t20(), "balanced", 1000 + seed)
+		var inn := e.current()
+		var team: CricketTeam = inn.batting_team if side == "bat" else inn.bowling_team
+		while e.current() == inn and not e.finished:
+			if message != "" and e.can_send_message(team):
+				e.send_message(team, message)
+				e.message_uses.clear()  # full strength every time, to measure the message itself
+			e.bowl_ball()
+		runs += inn.runs
+		wickets += inn.wickets
+	return {"runs": runs / 120.0, "wickets": wickets / 120.0}
 
 
 func _test_manager_choices(teams: Array) -> void:

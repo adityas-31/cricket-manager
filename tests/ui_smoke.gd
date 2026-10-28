@@ -65,11 +65,15 @@ func _process(_delta: float) -> bool:
 	tactics._move_to(3, 0)
 	print("drag and drop ok")
 
-	# Training: batting focus at hard intensity, with one player on their own bowling focus.
+	# Training: the Batting template, one day set by hand, and one player on their own focus.
 	_app.show_screen("training")
 	var training: Node = _app._screens["training"]
-	training._set_plan("focus", "Batting")
-	training._set_plan("intensity", "Hard")
+	training._set_template("Batting")
+	var block := Training.block(season)
+	assert(not block.is_empty(), "training days before the next match")
+	season.training_plan[block[0]] = ["Fitness", "Mental"]
+	assert(Training.sessions_for(season, block[0]) == ["Fitness", "Mental"], "a day set by hand")
+	assert(Training.sessions_for(season, block[-1])[1] == "Match prep", "Match prep the day before a match")
 	season.training_focus[club.squad[-1]] = "Bowling"
 	training.on_shown()
 	_app.show_screen("tactics")
@@ -106,8 +110,15 @@ func _process(_delta: float) -> bool:
 			assert(not season.last_selection_changes.is_empty(), "injury cover reported")
 			print("cover: %s" % season.last_selection_changes[0])
 		var buttons: Array = match_screen._instructions.find_children("*", "Button", true, false).filter(
-			func(b): return not b is OptionButton)
+			func(b): return not b is OptionButton and b.text != "Send")
 		buttons[-1].pressed.emit()
+		if round == 0:
+			_check_locked_xi(match_screen, club)
+			var send: Array = match_screen._instructions.find_children("*", "Button", true, false).filter(
+				func(b): return b.text == "Send")
+			send[0].pressed.emit()
+			assert(match_screen.engine.messages.has(club), "touchline message sent from Match Day")
+			print("message: %s" % match_screen.engine.messages[club].name)
 		match_screen._play("over")
 		if round == 0:
 			_use_match_controls(match_screen, club)
@@ -121,7 +132,7 @@ func _process(_delta: float) -> bool:
 		_app._on_continue()
 	assert(season.fixtures.filter(func(f): return not f.result.is_empty()).size() == 12, "3 rounds of 4 fixtures played")
 	assert(_innings_breaks >= 3, "play paused at each innings break")
-	assert(season.last_training.days > 0 and season.news.any(func(n): return n.title == "Training report"), "training ran")
+	assert(not season.last_training.days.is_empty() and season.news.any(func(n): return n.title == "Training report"), "training ran")
 	_app.show_screen("training")
 	print("training ok: %s" % Training.summary(season.last_training, season))
 
@@ -205,8 +216,8 @@ func _process(_delta: float) -> bool:
 
 	var reloaded := Season.load_from(SAVE)
 	assert(reloaded and reloaded.day == season.day, "autosave matches the live season")
-	assert(reloaded.training == season.training and reloaded.training_focus.size() == season.training_focus.size(),
-		"training plan saved")
+	assert(reloaded.training_template == season.training_template and reloaded.training_plan == season.training_plan
+		and reloaded.training_focus.size() == season.training_focus.size(), "training plan saved")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
 	_check_log()
 	print("UI SMOKE PASSED (%d review prompts answered)" % _reviews_answered)
@@ -244,6 +255,25 @@ func _clear_logs() -> void:
 	DirAccess.remove_absolute(real)
 
 
+## Mid-match the XI is locked on Tactics (order still changes) and Continue goes back.
+func _check_locked_xi(match_screen: Node, club: CricketTeam) -> void:
+	assert(_app.match_in_progress(), "match in progress after Start Match")
+	_app.show_screen("tactics")
+	var tactics: Node = _app._screens["tactics"]
+	var xi: Array = club.players.duplicate()
+	var bench: CricketPlayer = club.reserves().filter(func(p): return not _app.season.is_injured(p))[0]
+	assert(not tactics._can_drop_on_reserves(Vector2.ZERO, {"player": xi[0], "from": "xi"}), "can't drop mid-match")
+	assert(not tactics._can_drop_on_xi(Vector2.ZERO, {"player": bench, "from": "reserve"}, 0), "can't swap mid-match")
+	tactics._drop(xi[0])
+	tactics._swap(bench, xi[1])
+	assert(club.players.size() == 11 and not bench in club.players, "XI unchanged mid-match")
+	assert(tactics._can_drop_on_xi(Vector2.ZERO, {"player": xi[10], "from": "xi"}, 9), "order can still change")
+	assert(tactics.continue_label() == "Back to Match", "Continue goes back to the match")
+	tactics.on_continue()
+	assert(_app._current == match_screen, "back on Match Day")
+	print("mid-match: XI locked, order open")
+
+
 ## Plays the match on screen to the end, answering review prompts (review every other one).
 func _finish(match_screen: Node) -> void:
 	var guard := 0
@@ -252,7 +282,8 @@ func _finish(match_screen: Node) -> void:
 		match_screen._play("end")
 		if match_screen._break:
 			_innings_breaks += 1
-			assert(match_screen.continue_label().begins_with("Start"), "innings break offers to start the next innings")
+			assert(match_screen.fixture.is_empty() or match_screen.continue_label().begins_with("Start"),
+				"innings break offers to start the next innings")
 		if not match_screen.engine.pending_review.is_empty():
 			assert(match_screen._review_box.visible, "review prompt shown")
 			match_screen._resolve_review(_reviews_answered % 2 == 0)
@@ -271,6 +302,10 @@ func _use_match_controls(match_screen: Node, club: CricketTeam) -> void:
 		spots[0] = [30.0, 40.0]
 		match_screen._field.field_edited.emit(spots)
 		assert(engine.field_name(inn) == Fields.CUSTOM, "fielder moved")
+		if inn.bowler.is_empty():  # between overs a pick bowls the coming over; test the one after
+			match_screen._play("ball")
+			if not engine.pending_review.is_empty():
+				match_screen._resolve_review(false)
 		var choice: CricketPlayer = engine.eligible_bowlers(inn)[-1]
 		engine.set_next_bowler(club, choice)
 		var over := inn.legal_balls / 6

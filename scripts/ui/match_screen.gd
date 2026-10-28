@@ -26,6 +26,8 @@ var _field: FieldView
 var _bar: PanelContainer
 var _bar_label: Label
 var _review_box: HBoxContainer
+var _break_tactics: Button
+var _message_pick := 0  # the message picker's choice, kept across refreshes
 var _decisions := {}  # decision kind -> count this match, for the play log
 var _end_logged := false
 var _shots_by_batter := {}  # CricketPlayer -> scoring shots this match, for the wagon wheel
@@ -82,10 +84,20 @@ func on_shown() -> void:
 	if not today.is_empty() and today.result.is_empty():
 		if fixture.is_empty() or fixture.id != today.id:
 			_start_fixture(today)
-	elif engine == null or (not fixture.is_empty() and fixture.day != app.season.day):
-		new_match()
+	elif engine == null or (not fixture.is_empty() and fixture.day != app.season.day) \
+			or (fixture.is_empty() and not engine.finished and not in_progress()):
+		new_match()  # a friendly nobody has started yet is rebuilt, so it picks up XI changes
 	_friendly_controls.visible = fixture.is_empty()
 	_refresh(false)
+
+
+## True while the club's match has started and isn't over: its XI is fixed (the engine
+## holds a state for each player), though the order, roles and plans can still change.
+## A league match counts from Start Match; a friendly from its first ball.
+func in_progress() -> bool:
+	if engine == null or engine.finished:
+		return false
+	return not fixture.is_empty() or not _last_event.is_empty() or not engine.pending_review.is_empty()
 
 
 func _ready() -> void:
@@ -262,6 +274,8 @@ func _log_event(e: Dictionary) -> void:
 	elif e.runs == 6:
 		colour = "#b388ff"
 	_log.append_text("[color=#9aa0a6]%s[/color]  [color=%s]%s[/color]\n" % [e.over_label, colour, e.commentary])
+	for m in e.get("messages_ended", []):
+		_log.append_text("[color=#9aa0a6]%s's message (%s) has run its course.[/color]\n" % [m.team.short_name, m.name])
 	var inn: Innings = engine.innings[e.innings - 1]
 	if e.end_of_over:
 		_log.append_text("[color=#9aa0a6]— End of over %d: %s  %s —[/color]\n" % [
@@ -370,6 +384,11 @@ func _build_match_view() -> Control:
 	_review_box.add_child(take)
 	_review_box.add_child(leave)
 	bar_row.add_child(_review_box)
+	_break_tactics = Button.new()
+	_break_tactics.text = "Edit Tactics"
+	_break_tactics.tooltip_text = "Change the batting order, roles and bowling plan before the next innings"
+	_break_tactics.pressed.connect(func(): app.show_screen("tactics"))
+	bar_row.add_child(_break_tactics)
 
 	var right := VBoxContainer.new()
 	right.custom_minimum_size.x = 330
@@ -522,6 +541,7 @@ func _refresh(animate: bool) -> void:
 	_refresh_scoreboard()
 	_refresh_batting()
 	_refresh_instructions()
+	_add_message_row()
 	_refresh_bowling()
 	_refresh_stats()
 	_refresh_bar()
@@ -714,6 +734,57 @@ func _refresh_instructions() -> void:
 			help, Fields.outside_count(spots), Fields.max_outside(phase)]))
 
 
+## Touchline messages (Touchline): pick one and send it, or see the one running.
+func _add_message_row() -> void:
+	if engine.finished:
+		return
+	var club: CricketTeam = app.club
+	if not club in engine.teams:
+		return
+	_instructions.add_child(UIKit.label("MESSAGE TO THE MIDDLE", 11, UIKit.TEXT_DIM))
+	var running: Dictionary = engine.messages.get(club, {})
+	if not running.is_empty():
+		var aimed: String = " at %s" % running.bowler.surname() if running.bowler != null else ""
+		_instructions.add_child(UIKit.label("%s%s  ·  %d balls left" % [running.name, aimed, running.balls_left], 13, UIKit.POSITIVE))
+		_instructions.add_child(_hint(Touchline.MESSAGES[running.name].desc))
+		return
+	var wait: int = engine.message_wait.get(club, 0)
+	if wait > 0:
+		_instructions.add_child(_hint("The players need time to take the last one in: next message in %d balls." % wait))
+		return
+	var options := engine.message_options(club)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var picker := OptionButton.new()
+	picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picker.clip_text = true
+	picker.add_theme_font_size_override("font_size", 12)
+	var uses: Dictionary = engine.message_uses.get(club, {})
+	for i in options.size():
+		picker.add_item(options[i] + ("  (sent before)" if uses.has(options[i]) else ""))
+		picker.set_item_tooltip(i, Touchline.MESSAGES[options[i]].desc)
+	picker.selected = clampi(_message_pick, 0, options.size() - 1)
+	var desc := _hint(Touchline.MESSAGES[options[picker.selected]].desc)
+	picker.item_selected.connect(func(i):
+		_message_pick = i
+		desc.text = Touchline.MESSAGES[options[i]].desc)
+	row.add_child(picker)
+	var send := Button.new()
+	send.text = "Send"
+	send.theme_type_variation = "AccentButton"
+	send.add_theme_font_size_override("font_size", 12)
+	send.pressed.connect(func():
+		var name: String = options[picker.selected]
+		var line := engine.send_message(club, name)
+		if line != "":
+			_log.append_text("[color=#ffca28]%s[/color]\n" % line)
+			_decision("message", {"message": name})
+		_refresh(false))
+	row.add_child(send)
+	_instructions.add_child(row)
+	_instructions.add_child(desc)
+
+
 func _labelled_picker(title: String, items: Array, selected: int, on_pick: Callable) -> Control:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
@@ -822,6 +893,7 @@ func _refresh_bar() -> void:
 		accent = UIKit.POSITIVE
 	var pending := engine.pending_review
 	_review_box.visible = not pending.is_empty()
+	_break_tactics.visible = _break
 	if not pending.is_empty():
 		var appeal: Dictionary = pending.result.appeal
 		var meta: Dictionary = pending.meta
